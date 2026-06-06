@@ -1,0 +1,112 @@
+import fs from "fs";
+
+// ===================
+// COMMAND MAP
+// ===================
+
+const commands = new Map();
+
+const files = fs.readdirSync("./commands")
+.filter(file => file.endsWith(".js"));
+
+for(const file of files){
+
+const cmd = await import(`./commands/${file}`);
+
+commands.set(
+file.replace(".js","").toLowerCase(),
+cmd.default
+);
+
+}
+
+// ===================
+// HANDLER
+// ===================
+
+export default async function handler(sock, from, body, m){
+
+try{
+
+if(!body || !body.startsWith("!")) return;
+
+const args = body.slice(1).trim().split(/ +/);
+
+const command = args.shift().toLowerCase();
+
+
+// ===================
+// FILE COMMAND SYSTEM
+// ===================
+
+const cmd = commands.get(command);
+
+if(cmd){
+
+if(typeof cmd === "function"){
+
+await cmd(
+sock,
+from,
+body,
+m,
+args
+);
+
+return;
+
+}
+
+if(typeof cmd.execute === "function"){
+
+await cmd.execute(
+sock,
+from,
+m,
+args,
+body
+);
+
+return;
+
+}
+
+}
+
+
+// ===================
+// SWITCH / CASE SYSTEM
+// ===================
+
+switch(command){
+
+case "ping":
+
+await sock.sendMessage(from,{
+text:"pong 🏓"
+});
+
+break;
+
+
+case "owner":
+
+await sock.sendMessage(from,{
+text:"👑 PANJSHIRI OWNER"
+});
+
+break;
+
+}
+
+}catch(e){
+
+console.log("HANDLER ERROR:", e);
+
+await sock.sendMessage(from,{
+text:"❌ command error"
+});
+
+}
+
+}

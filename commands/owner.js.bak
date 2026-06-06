@@ -1,0 +1,20 @@
+export default async function owner(
+sock,
+from
+){
+
+await sock.sendMessage(from,{
+text:`
+👑 OWNER INFO
+
+Name:
+RAEES SULTAN
+
+System:
+WHATSAPP BOT
+
+🔥 POWERED BY BAILEYS
+`
+});
+
+}

