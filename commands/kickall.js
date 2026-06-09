@@ -1,0 +1,21 @@
+export async function kickall(sock, from, sender) {
+  try {
+    const metadata = await sock.groupMetadata(from);
+    const participants = metadata.participants;
+
+    const botAdmin = metadata.participants.find(p => p.id === sock.user.id);
+
+    for (let p of participants) {
+      if (p.id !== sock.user.id && p.id !== sender) {
+        await sock.groupParticipantsUpdate(from, [p.id], "remove");
+      }
+    }
+
+    await sock.sendMessage(from, {
+      text: "☠️ همه اعضا اخراج شدند!"
+    });
+
+  } catch (e) {
+    console.log("KickAll Error:", e);
+  }
+}

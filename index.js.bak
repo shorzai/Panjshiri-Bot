@@ -1,0 +1,174 @@
+import express from "express";
+
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion
+} from "@whiskeysockets/baileys";
+
+import Pino from "pino";
+import readline from "readline";
+import cfonts from "cfonts";
+import handler from "./handler.js";
+
+let reconnecting = false;
+
+// =====================
+// 🌐 RENDER FIX (KEEP ALIVE SERVER)
+// =====================
+const app = express();
+
+app.get("/", (req, res) => {
+  res.status(200).send("🟢 BOT IS RUNNING");
+});
+
+app.get("/ping", (req, res) => {
+  res.send("pong");
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🌐 Server running on port ${PORT}`);
+});
+
+// =====================
+// 🔁 ANTI SLEEP PING (Render keep alive)
+// =====================
+setInterval(() => {
+  try {
+    const url = process.env.RENDER_EXTERNAL_URL || "http://localhost:3000";
+    fetch(url + "/ping").catch(() => {});
+  } catch (e) {}
+}, 4 * 60 * 1000);
+
+// =====================
+// INPUT SYSTEM
+// =====================
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+function question(text) {
+  return new Promise((resolve) => rl.question(text, resolve));
+}
+
+async function start() {
+
+  // =====================
+  // LOGO
+  // =====================
+  cfonts.say("LION KING", {
+    font: "block",
+    align: "center",
+    colors: ["red", "yellow"]
+  });
+
+  console.log(`
+🦁 SULTAN SHIRZOI PANJSHIRI BOT STARTING...
+`);
+
+  const { state, saveCreds } = await useMultiFileAuthState("./session");
+  const { version } = await fetchLatestBaileysVersion();
+
+  const sock = makeWASocket({
+    auth: state,
+    version,
+    logger: Pino({ level: "silent" }),
+    browser: ["Ubuntu", "Chrome", "120.0.0"],
+    printQRInTerminal: false
+  });
+
+  sock.ev.on("creds.update", saveCreds);
+
+  // =====================
+  // CONNECTION HANDLER
+  // =====================
+  sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect, pairingCode } = update;
+
+    console.log("STATE:", connection);
+
+    if (pairingCode) {
+      console.log("\n🔑 PAIRING CODE:", pairingCode);
+    }
+
+    if (connection === "open") {
+      reconnecting = false;
+      console.log("✔ CONNECTED SUCCESSFULLY");
+    }
+
+    if (connection === "close") {
+      const code = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = code !== DisconnectReason.loggedOut;
+
+      if (!shouldReconnect) {
+        console.log("❌ LOGGED OUT");
+        return;
+      }
+
+      if (reconnecting) return;
+      reconnecting = true;
+
+      console.log("♻ RECONNECTING...");
+
+      setTimeout(() => {
+        reconnecting = false;
+        start();
+      }, 5000);
+    }
+  });
+
+  // =====================
+  // MESSAGE HANDLER
+  // =====================
+  sock.ev.on("messages.upsert", async ({ messages }) => {
+    try {
+      const m = messages[0];
+      if (!m?.message) return;
+
+      const from = m.key.remoteJid;
+
+      const body =
+        m.message.conversation ||
+        m.message.extendedTextMessage?.text ||
+        "";
+
+      await handler(sock, from, body, m);
+
+    } catch (e) {
+      console.log("MSG ERROR:", e);
+    }
+  });
+
+  // =====================
+  // PAIRING CODE
+  // =====================
+  const phone = await question(
+    "📞 Enter your WhatsApp number (example: 937xxxxxxxx): "
+  );
+
+  rl.close();
+
+  try {
+    const code = await sock.requestPairingCode(phone);
+    console.log("\n🔑 Pairing Code:", code);
+
+  } catch (e) {
+    console.log("❌ Error generating code:", e);
+  }
+}
+
+// =====================
+// SAFETY CRASH HANDLERS
+// =====================
+process.on("uncaughtException", (err) => {
+  console.log("❌ CRASH:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.log("❌ PROMISE ERROR:", err);
+});
+
+start();
