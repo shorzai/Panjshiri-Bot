@@ -1,109 +1,220 @@
 import fs from "fs";
-import path from "path";
 
 export default async function help(sock, from, body, m){
 
 try{
 
-let imagePath = "./sultan/help.jpg";
+
+const imagePath = "./sultan/help.jpg";
 
 const prefix = "!";
 
-// 📦 خواندن خودکار دستورات از فولدر commands
 const cmdPath = "./commands";
-const files = fs.readdirSync(cmdPath)
-.filter(f => f.endsWith(".js"))
-.map(f => f.replace(".js",""));
 
-// دسته‌بندی دستی (برای زیبایی)
-const ai = ["ai","ai-lite","gpt","ask"];
-const group = ["add","addall","kick","promote","demote","tagall"];
-const sec = ["antiforeign","autoclear","antiemoji","antiimage","antivideo","antiaudio"];
-const econ = ["balance","daily","gamble","rank","level"];
-const fun = ["joke","roast","love","quote","dice","fakereply"];
-const sys = ["ping","alive","time","device","check","whois"];
-const admin = ["broadcast","invite","join","block","unblock"];
+const files =
+fs.readdirSync(cmdPath)
+.filter(f=>f.endsWith(".js"))
+.map(f=>f.replace(".js",""))
+.sort();
 
-// helper
-const format = (arr) =>
-arr.filter(c => files.includes(c))
-.map(c => `┃ • ${prefix}${c}`)
+
+
+const categories = {
+
+"🤖 AI SYSTEM":[
+"ai",
+"ai-lite",
+"gpt",
+"ask",
+"translate",
+"search"
+],
+
+
+"👥 GROUP SYSTEM":[
+"add",
+"addall",
+"kick",
+"promote",
+"demote",
+"tagall",
+"welcome",
+"goodbye"
+],
+
+
+"🛡 SECURITY SYSTEM":[
+"anticall",
+"antidelete",
+"antidelete2",
+"antibot",
+"antilink",
+"antispam",
+"antiimage",
+"antivideo",
+"antiaudio"
+],
+
+
+"💰 ECONOMY SYSTEM":[
+"balance",
+"daily",
+"gamble",
+"rank",
+"level"
+],
+
+
+"🎮 FUN SYSTEM":[
+"joke",
+"roast",
+"love",
+"quote",
+"dice",
+"fakereply",
+"mafia"
+],
+
+
+"⚙️ SYSTEM TOOLS":[
+"ping",
+"alive",
+"time",
+"device",
+"whois",
+"stats",
+"menu"
+],
+
+
+"👑 OWNER TOOLS":[
+"broadcast",
+"join",
+"block",
+"unblock",
+"eval"
+]
+
+};
+
+
+
+
+let text = `
+╭━━━〔 👑 RAEES SULTAN BOT 👑 〕━━━╮
+
+⚡ HELP CENTER V2
+
+📌 Prefix:
+${prefix}
+
+📚 Total Commands:
+${files.length}
+
+━━━━━━━━━━━━━━━━━━━━
+`;
+
+
+
+for(const [title,list] of Object.entries(categories)){
+
+
+const cmds =
+list
+.filter(c=>files.includes(c))
+.map(c=>`┃ ⚡ ${prefix}${c}`)
 .join("\n");
 
-const menu = `
-╭━━〔 👑 SUPER HELP MENU 👑 〕━━╮
 
-📌 HOW TO USE:
-💡 ${prefix}command text
 
-━━━━━━━━━━━━━━━━━━━━━━
+if(cmds){
 
-🤖 AI SYSTEM
-${format(ai)}
+text +=
+`
+${title}
 
-━━━━━━━━━━━━━━━━━━━━━━
+${cmds}
 
-👥 GROUP SYSTEM
-${format(group)}
+━━━━━━━━━━━━━━━━━━━━
+`;
 
-━━━━━━━━━━━━━━━━━━━━━━
+}
 
-🔐 SECURITY SYSTEM
-${format(sec)}
 
-━━━━━━━━━━━━━━━━━━━━━━
+}
 
-💰 ECONOMY SYSTEM
-${format(econ)}
 
-━━━━━━━━━━━━━━━━━━━━━━
 
-😂 FUN SYSTEM
-${format(fun)}
 
-━━━━━━━━━━━━━━━━━━━━━━
+text +=
+`
+💎 FEATURES:
 
-🛠 SYSTEM TOOLS
-${format(sys)}
+✅ Auto Command Loader
+✅ Anti Systems
+✅ AI Assistant
+✅ Group Manager
+✅ Economy System
+✅ Mafia Game
+✅ Owner Control
 
-━━━━━━━━━━━━━━━━━━━━━━
+🤖 Status:
+🟢 ONLINE
 
-👑 ADMIN TOOLS
-${format(admin)}
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-⚡ INFO:
-✔ Commands auto-loaded
-✔ Prefix: ${prefix}
-✔ Some commands need admin
-
-╰━━━━━━━━━━━━━━━━━━━━━━╯
+╰━━━━━━━━━━━━━━━━━━━━╯
 
 👑 RAEES SULTAN BOT
 `;
 
+
+
+
 await sock.sendMessage(from,{
-image: fs.readFileSync(imagePath),
-caption: menu,
+
+image:
+fs.readFileSync(imagePath),
+
+caption:text,
+
 contextInfo:{
+
 forwardingScore:999,
+
 isForwarded:true,
-forwardedNewsletterMessageInfo:{
-newsletterName:"👑 RAEES SULTAN BOT",
-newsletterJid:"120363000000000000@newsletter",
-serverMessageId:1
+
+
+externalAdReply:{
+
+title:"👑 RAEES SULTAN BOT",
+
+body:
+`⚡ ${files.length} Commands Active`,
+
+thumbnail:
+fs.readFileSync(imagePath),
+
+sourceUrl:"https://whatsapp.com"
+
 }
+
 }
+
 });
+
+
 
 }catch(e){
 
-console.log("SUPER HELP ERROR:", e);
+console.log(
+"SUPER HELP ERROR:",
+e
+);
+
 
 await sock.sendMessage(from,{
-text:"❌ help error"
+text:"❌ Help system error"
 });
+
 
 }
 

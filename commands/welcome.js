@@ -1,6 +1,11 @@
-export default async function welcome(
-sock
-){
+let started = false;
+
+export default async function welcome(sock){
+
+if(started) return;
+
+started = true;
+
 
 sock.ev.on(
 "group-participants.update",
@@ -8,27 +13,98 @@ async(data)=>{
 
 try{
 
+
 if(data.action !== "add") return;
 
-const user = data.participants[0];
 
-await sock.sendMessage(data.id,{
-text:`
-👋 Welcome
+const group =
+await sock.groupMetadata(data.id);
 
-@${user.split("@")[0]}
 
-🔥 Enjoy group
+
+for(const user of data.participants){
+
+
+const name =
+user.split("@")[0];
+
+
+const total =
+group.participants.length;
+
+
+
+await sock.sendMessage(
+data.id,
+{
+
+text:
+`
+╭━━━〔 ✨ WELCOME ✨ 〕━━━╮
+
+👋 سلام و خوش آمدید
+
+@${name}
+
+🎉 عضو جدید گروه شدید
+
+
+╭━━━━━━━╮
+📌 گروه:
+${group.subject}
+
+👥 اعضا:
+${total}
+
+🤖 ربات:
+🟢 آنلاین
+
+⚡ سازنده:
+SULTAN SHIRZAI
+╰━━━━━━━╯
+
+
+📜 قوانین گروه:
+
+🚫 اسپم ممنوع
+🔗 لینک بدون اجازه ممنوع
+🤝 احترام به همه الزامی
+🔞 محتوای نامناسب ممنوع
+📢 تبلیغات بدون اجازه ممنوع
+
+
+💎 امیدواریم لحظات خوبی کنار ما داشته باشید ❤️
+
+
+╰━━━〔 🤖 BOT SYSTEM 〕━━━╯
 `,
-mentions:[user]
+
+mentions:[
+user
+]
+
 });
 
-}catch(e){
-
-console.log(e);
 
 }
 
+
+}catch(e){
+
+console.log(
+"WELCOME ERROR:",
+e.message
+);
+
+}
+
+
 });
+
+
+console.log(
+"✅ Stylish welcome started"
+);
+
 
 }

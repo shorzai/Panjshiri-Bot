@@ -1,0 +1,212 @@
+import fs from "fs";
+
+const path = "./data/shadow.json";
+
+
+function load(){
+
+try{
+
+if(!fs.existsSync("./data")){
+fs.mkdirSync("./data");
+}
+
+
+if(!fs.existsSync(path)){
+
+fs.writeFileSync(
+path,
+JSON.stringify({
+enabled:true,
+users:{}
+},null,2)
+);
+
+}
+
+
+return JSON.parse(
+fs.readFileSync(path)
+);
+
+
+}catch(e){
+
+console.log("SHADOW LOAD ERROR:",e);
+
+return {
+enabled:true,
+users:{}
+};
+
+}
+
+}
+
+
+
+function save(data){
+
+fs.writeFileSync(
+path,
+JSON.stringify(data,null,2)
+);
+
+}
+
+
+
+function getRank(level){
+
+if(level >= 100)
+return "👑 LEGEND";
+
+if(level >= 50)
+return "💎 ELITE";
+
+if(level >= 20)
+return "🥇 PRO";
+
+if(level >= 5)
+return "🥈 ACTIVE";
+
+return "🥉 NEWBIE";
+
+}
+
+
+
+export default async function shadow(sock){
+
+
+sock.ev.on(
+"messages.upsert",
+async({messages})=>{
+
+try{
+
+
+const m = messages[0];
+
+
+if(!m.message)
+return;
+
+
+
+const chat =
+m.key.remoteJid;
+
+
+
+if(!chat.endsWith("@g.us"))
+return;
+
+
+
+const user =
+m.key.participant;
+
+
+
+if(!user)
+return;
+
+
+
+let db = load();
+
+
+
+if(!db.enabled)
+return;
+
+
+
+if(!db.users[user]){
+
+db.users[user]={
+
+messages:0,
+
+today:0,
+
+xp:0,
+
+level:1,
+
+rank:"🥉 NEWBIE",
+
+lastMessage:0,
+
+warnings:0
+
+};
+
+}
+
+
+
+const now = Date.now();
+
+
+// جلوگیری از فارم XP
+if(
+now - db.users[user].lastMessage > 5000
+){
+
+db.users[user].xp += 5;
+
+}
+
+
+
+db.users[user].messages++;
+
+db.users[user].today++;
+
+db.users[user].level =
+Math.floor(
+db.users[user].xp / 100
+)+1;
+
+
+db.users[user].rank =
+getRank(
+db.users[user].level
+);
+
+
+db.users[user].lastMessage =
+now;
+
+
+
+// ضد اسپم Shadow
+
+if(
+now - db.users[user].lastMessage < 1000
+){
+
+db.users[user].warnings++;
+
+}
+
+
+
+save(db);
+
+
+
+}catch(e){
+
+console.log(
+"SHADOW ERROR:",
+e
+);
+
+}
+
+});
+
+}

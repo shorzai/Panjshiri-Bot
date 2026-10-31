@@ -1,92 +1,120 @@
-const antiLinks = {};
+import { getDB, saveDB } from "../lib/db.js";
 
-export default async function antilink(
-sock,
-from,
-body,
-m,
-args
-){
+// ==========================================
+// تابع اصلی — دستور on/off
+// ==========================================
+export default async function antilink(sock, from, body, m, args) {
+  try {
+    if (!from.endsWith("@g.us")) return;
 
-try{
+    let db = getDB();
+    db.groups ??= {};
+    db.groups[from] ??= {};
 
-// روشن
-if(args[0] === "on"){
+    // روشن کردن
+    if (args[0] === "on") {
+      db.groups[from].antilink = true;
+      db.groups[from].warnings ??= {};
+      saveDB(db);
+      return sock.sendMessage(from, { text: "✅ ANTI-LINK فعال شد" });
+    }
 
-antiLinks[from] = true;
+    // خاموش کردن
+    if (args[0] === "off") {
+      db.groups[from].antilink = false;
+      saveDB(db);
+      return sock.sendMessage(from, { text: "❌ ANTI-LINK خاموش شد" });
+    }
 
-return sock.sendMessage(from,{
-text:"✅ ANTI-LINK ON"
-});
+    // راهنما
+    return sock.sendMessage(from, {
+      text: `وضعیت: ${db.groups[from]?.antilink ? "روشن ✅" : "خاموش ❌"}\n\n.antilink on\n.antilink off`
+    });
 
+  } catch (e) {
+    console.log("ANTILINK CMD ERROR:", e);
+  }
 }
 
-// خاموش
-if(args[0] === "off"){
 
-antiLinks[from] = false;
+// ==========================================
+// تابع چک هر پیام — handler.js صدا می‌زنه
+// return true  = لینک بود و اقدام شد
+// return false = لینک نبود / ادمین بود / مالک بود
+// ==========================================
+export async function checkAntilink(sock, from, body, m) {
+  try {
+    if (!from.endsWith("@g.us")) return false;
 
-return sock.sendMessage(from,{
-text:"❌ ANTI-LINK OFF"
-});
+    const db = getDB();
+    if (!db.groups?.[from]?.antilink) return false;
 
-}
+    const text = (body || "").toLowerCase();
 
-// اگر روشن نبود
-if(!antiLinks[from]) return;
+    const hasLink =
+      text.includes("chat.whatsapp.com") ||
+      text.includes("http://") ||
+      text.includes("https://") ||
+      text.includes("www.");
 
-// متن پیام
-const text =
-body.toLowerCase();
+    if (!hasLink) return false;
 
-// چک لینک
-if(
-text.includes("chat.whatsapp.com") ||
-text.includes("http://") ||
-text.includes("https://")
-){
+    const sender = m.key.participant || from;
 
-// اطلاعات گروه
-const meta =
-await sock.groupMetadata(from);
+    // چک ادمین گروه
+    const meta = await sock.groupMetadata(from);
+    const admins = meta.participants.filter(v => v.admin).map(v => v.id);
+    if (admins.includes(sender)) return false;
 
-// ادمین‌ها
-const admins =
-meta.participants
-.filter(v=>v.admin)
-.map(v=>v.id);
+    // چک مالک ربات
+    const owners = db.users || [];
+    const senderNum = sender.split("@")[0];
+    if (owners.includes(sender) || owners.includes(senderNum)) return false;
 
-// فرستنده
-const sender =
-m.key.participant || from;
+    // حذف پیام
+    try {
+      await sock.sendMessage(from, { delete: m.key });
+    } catch (e) {
+      console.log("DELETE FAILED:", e.message);
+    }
 
-// اگر ادمین بود رد شو
-if(admins.includes(sender)) return;
+    // شمارنده اخطار
+    db.groups[from].warnings ??= {};
+    db.groups[from].warnings[sender] =
+      (db.groups[from].warnings[sender] || 0) + 1;
 
-// حذف پیام
-await sock.sendMessage(from,{
-delete:m.key
-});
+    const count = db.groups[from].warnings[sender];
+    saveDB(db);
 
-// kick
-await sock.groupParticipantsUpdate(
-from,
-[sender],
-"remove"
-);
+    // اخطار اول
+    if (count === 1) {
+      await sock.sendMessage(from, {
+        text: `⚠️ اخطار ضد لینک\n\n@${senderNum}\nارسال لینک ممنوع است.\nاگر دوباره تکرار شود حذف می‌شوی.`,
+        mentions: [sender]
+      });
+      return true;
+    }
 
-// پیام
-await sock.sendMessage(from,{
-text:`🚫 @${sender.split("@")[0]} link detected`,
-mentions:[sender]
-});
+    // بار دوم — حذف از گروه
+    await sock.sendMessage(from, {
+      text: `🚫 @${senderNum} به دلیل تکرار لینک از گروه حذف شد.`,
+      mentions: [sender]
+    });
 
-}
+    try {
+      await sock.groupParticipantsUpdate(from, [sender], "remove");
+    } catch (e) {
+      console.log("REMOVE FAILED:", e.message);
+    }
 
-}catch(e){
+    // ریست شمارنده
+    delete db.groups[from].warnings[sender];
+    saveDB(db);
 
-console.log(e);
+    return true;
 
-}
-
+  } catch (e) {
+    console.log("ANTI LINK ERROR:", e);
+    return false;
+  }
 }

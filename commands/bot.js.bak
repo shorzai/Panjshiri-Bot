@@ -1,0 +1,485 @@
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const fs = require("fs");
+const path = require("path");
+
+let warnings = {};
+if (fs.existsSync("./warnings.json")) {
+    warnings = JSON.parse(fs.readFileSync("./warnings.json"));
+}
+
+function saveWarnings() {
+    fs.writeFileSync("./warnings.json", JSON.stringify(warnings, null, 4));
+}
+
+// کلمات فحش
+const badWords = ["fuck", "shit", "bitch","خر","احمق","کثافت","حرامی","لعنتی","سگ","گوساله","ولد"];
+
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState("./session");
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true
+    });
+
+    sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("connection.update", (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === "close") {
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            if (reason === DisconnectReason.loggedOut) {
+                console.log("❌ از واتساپ لاگ‌اوت شدی! دوباره QR اسکن کن.");
+            } else {
+                console.log("♻️ تلاش دوباره برای اتصال...");
+                startBot();
+            }
+        } else if (connection === "open") {
+            console.log("✔️ ربات وصل شد!");
+        }
+    });
+
+    sock.ev.on("messages.upsert", async (data) => {
+        const m = data.messages[0];
+        if (!m.message) return;
+
+        const from = m.key.remoteJid;
+        const sender = m.key.participant || m.key.remoteJid;
+        const text = m.message.conversation || "";
+
+        // گروهی بودن پیام
+        const isGroup = from.endsWith("@g.us");
+        let isAdmin = false;
+        let botAdmin = false;
+
+        if (isGroup) {
+            const metadata = await sock.groupMetadata(from);
+            const admins = metadata.participants.filter(p => p.admin !== null).map(p => p.id);
+            isAdmin = admins.includes(sender);
+            botAdmin = admins.includes(sock.user.id);
+        }
+
+        // 🔥 ضد لینک پیشرفته
+        if (text.includes("chat.whatsapp.com") || text.includes("https://")) {
+            if (isGroup && !isAdmin && botAdmin) {
+                await sock.sendMessage(from, {
+                    text: `🚫 لینک ممنوع!\n@${sender.split("@")[0]} حذف شد.`,
+                    mentions: [sender]
+                });
+                await sock.groupParticipantsUpdate(from, [sender], "remove");
+                return;
+            }
+        }
+
+        // 🔥 ضد فحش
+        for (let word of badWords) {
+            if (text.toLowerCase().includes(word)) {
+                if (!warnings[sender]) warnings[sender] = 0;
+                warnings[sender]++;
+                saveWarnings();
+
+                if (warnings[sender] === 1) {
+                    return sock.sendMessage(from, { text: `⚠️ *اخطار اول*\n@${sender.split("@")[0]} ادب را رعایت کنید.`, mentions: [sender] });
+                }
+                if (warnings[sender] === 2) {
+                    return sock.sendMessage(from, { text: `⚠️⚠️ *اخطار دوم*\n@${sender.split("@")[0]} آخرین هشدار است.`, mentions: [sender] });
+                }
+                if (warnings[sender] >= 3 && botAdmin) {
+                    await sock.sendMessage(from, { text: `❌ *اخطار سوم*\n@${sender.split("@")[0]} از گروه حذف شد.`, mentions: [sender] });
+                    await sock.groupParticipantsUpdate(from, [sender], "remove");
+                    warnings[sender] = 0;
+                    saveWarnings();
+                }
+                return;
+            }
+        }
+
+        // =======================
+        // دستورات گروهی و تک نفره
+        // =======================
+        if (text.startsWith("!add ")) {
+            const number = text.split(" ")[1] + "@s.whatsapp.net";
+            if (isGroup && botAdmin) {
+                await sock.groupParticipantsUpdate(from, [number], "add");
+                return sock.sendMessage(from, { text: `✔️ کاربر اضافه شد.` });
+            }
+        }
+
+        if (text.startsWith("!kick ")) {
+            const number = text.split(" ")[1] + "@s.whatsapp.net";
+            if (isGroup && botAdmin) {
+                await sock.groupParticipantsUpdate(from, [number], "remove");
+                return sock.sendMessage(from, { text: `✔️ کاربر حذف شد.` });
+            }
+        }
+
+        if (text.startsWith("!mute ")) {
+            const number = text.split(" ")[1] + "@s.whatsapp.net";
+            if (isGroup && botAdmin) {
+                await sock.sendMessage(from, { text: `🤐 کاربر @${number.split("@")[0]} برای ۵ دقیقه سایلنت شد.`, mentions: [number] });
+                setTimeout(async () => {
+                    await sock.sendMessage(from, { text: `⏳ سایلنت کاربر @${number.split("@")[0]} پایان یافت.`, mentions: [number] });
+                }, 5 * 60 * 1000);
+            }
+        }
+
+        // =======================
+        // منو با ویدیو
+        // =======================
+        if (text === "menu") {
+            const menuText = `
+╭─⊷ RAEES SULTAN PANJSHIRI ─
+│ ▢ Owner: پنجشیری
+│ ▢ Version: 2.0.0
+│ ▢ Type: Complete Bot
+╰────────────
+
+📌 Main Commands
+• menu    • ping    • ping2
+• uptime  • botinfo • listplugin
+• update  • request
+
+🤖 Control Bot
+• public     • private
+• addaccess  • delaccess
+• autoreact  • block
+• autotyping • autorecord
+• autobio    • setprefix
+• autostatusview
+• onlygc     • onlypc
+• unavailable • > • $
+
+🎬 Media
+• play     • playdoc
+• ytmp4    • ytvid
+• yts      • pinterestdl
+• vv       • song
+• twitterdl• tt
+• tiktok   • igdl
+• ytmp3    • video
+
+🧠 AI
+• gemma    • copilot
+
+⚡ Get
+• gethtml  • getpp
+• getplugin• save
+• gitclone • weather
+• shorturl
+
+👥 Grup
+• add      • remove
+• promote  • revoke
+• approve  • reject
+• antilinkgc • antilink
+• tagall   • hidetag
+• close    • open
+• kickall  • linkgc
+• setppgc  • setdesc
+• tagme    • warn
+• unwarn   • welcome
+• goodbye
+• disp-1   • disp-7
+• disp-90  • disp-off
+
+🛠 Tool
+• enc      • idch
+• dev
+
+🩸 Ephoto
+• glithtext     • lighteffects
+• writetext     • advancedglow
+• typographytext• pixelglitch
+• neonglitch    • flagtext
+• flag3dtext    • deletingtext
+• blackpinkstyle• glowingtex
+• underwater    • logomaker
+• cartoonstyle  • papercutstyle
+• watercolortext• effectclouds
+• blackpinklogo • gradienttext
+• luxurygold    • sandsummer
+• multicoloredneon
+• galaxywallpaper• 1917style
+• galaxystyle   • royaltext
+• freecreate
+
+🤠 Fun
+• truth    • dare
+• cry      • kill
+• happy    • hug
+• lick     • pat
+• bite     • kiss
+• bully    • bonk
+• poke     • slap
+• wink     • dance
+• cuddle   • cringe
+• blush    • smile
+• shinobu  • handhold
+• highfive • wave
+• nom      • feed
+• meow     • woof
+• lizard   • spank
+• tickle   • fox_girl
+• avatar   • goose
+• 8ball    • gecg
+
+⚽ Futbol
+• epl      • laliga
+• serie-a  • ligue-1
+• bundesliga
+
+> By پنجشیری
+`;
+
+            if (fs.existsSync("./menu.mp4")) {
+                await sock.sendMessage(from, { video: { url: "./menu.mp4" }, caption: menuText });
+            } else {
+                await sock.sendMessage(from, { text: menuText });
+            }
+        }
+
+    });
+}
+
+startBot();const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const fs = require("fs");
+const path = require("path");
+
+let warnings = {};
+if (fs.existsSync("./warnings.json")) {
+    warnings = JSON.parse(fs.readFileSync("./warnings.json"));
+}
+
+function saveWarnings() {
+    fs.writeFileSync("./warnings.json", JSON.stringify(warnings, null, 4));
+}
+
+// کلمات فحش
+const badWords = ["fuck", "shit", "bitch","خر","احمق","کثافت","حرامی","لعنتی","سگ","گوساله","ولد"];
+
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState("./session");
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true
+    });
+
+    sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("connection.update", (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === "close") {
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            if (reason === DisconnectReason.loggedOut) {
+                console.log("❌ از واتساپ لاگ‌اوت شدی! دوباره QR اسکن کن.");
+            } else {
+                console.log("♻️ تلاش دوباره برای اتصال...");
+                startBot();
+            }
+        } else if (connection === "open") {
+            console.log("✔️ ربات وصل شد!");
+        }
+    });
+
+    sock.ev.on("messages.upsert", async (data) => {
+        const m = data.messages[0];
+        if (!m.message) return;
+
+        const from = m.key.remoteJid;
+        const sender = m.key.participant || m.key.remoteJid;
+        const text = m.message.conversation || "";
+
+        // گروهی بودن پیام
+        const isGroup = from.endsWith("@g.us");
+        let isAdmin = false;
+        let botAdmin = false;
+
+        if (isGroup) {
+            const metadata = await sock.groupMetadata(from);
+            const admins = metadata.participants.filter(p => p.admin !== null).map(p => p.id);
+            isAdmin = admins.includes(sender);
+            botAdmin = admins.includes(sock.user.id);
+        }
+
+        // 🔥 ضد لینک پیشرفته
+        if (text.includes("chat.whatsapp.com") || text.includes("https://")) {
+            if (isGroup && !isAdmin && botAdmin) {
+                await sock.sendMessage(from, {
+                    text: `🚫 لینک ممنوع!\n@${sender.split("@")[0]} حذف شد.`,
+                    mentions: [sender]
+                });
+                await sock.groupParticipantsUpdate(from, [sender], "remove");
+                return;
+            }
+        }
+
+        // 🔥 ضد فحش
+        for (let word of badWords) {
+            if (text.toLowerCase().includes(word)) {
+                if (!warnings[sender]) warnings[sender] = 0;
+                warnings[sender]++;
+                saveWarnings();
+
+                if (warnings[sender] === 1) {
+                    return sock.sendMessage(from, { text: `⚠️ *اخطار اول*\n@${sender.split("@")[0]} ادب را رعایت کنید.`, mentions: [sender] });
+                }
+                if (warnings[sender] === 2) {
+                    return sock.sendMessage(from, { text: `⚠️⚠️ *اخطار دوم*\n@${sender.split("@")[0]} آخرین هشدار است.`, mentions: [sender] });
+                }
+                if (warnings[sender] >= 3 && botAdmin) {
+                    await sock.sendMessage(from, { text: `❌ *اخطار سوم*\n@${sender.split("@")[0]} از گروه حذف شد.`, mentions: [sender] });
+                    await sock.groupParticipantsUpdate(from, [sender], "remove");
+                    warnings[sender] = 0;
+                    saveWarnings();
+                }
+                return;
+            }
+        }
+
+        // =======================
+        // دستورات گروهی و تک نفره
+        // =======================
+        if (text.startsWith("!add ")) {
+            const number = text.split(" ")[1] + "@s.whatsapp.net";
+            if (isGroup && botAdmin) {
+                await sock.groupParticipantsUpdate(from, [number], "add");
+                return sock.sendMessage(from, { text: `✔️ کاربر اضافه شد.` });
+            }
+        }
+
+        if (text.startsWith("!kick ")) {
+            const number = text.split(" ")[1] + "@s.whatsapp.net";
+            if (isGroup && botAdmin) {
+                await sock.groupParticipantsUpdate(from, [number], "remove");
+                return sock.sendMessage(from, { text: `✔️ کاربر حذف شد.` });
+            }
+        }
+
+        if (text.startsWith("!mute ")) {
+            const number = text.split(" ")[1] + "@s.whatsapp.net";
+            if (isGroup && botAdmin) {
+                await sock.sendMessage(from, { text: `🤐 کاربر @${number.split("@")[0]} برای ۵ دقیقه سایلنت شد.`, mentions: [number] });
+                setTimeout(async () => {
+                    await sock.sendMessage(from, { text: `⏳ سایلنت کاربر @${number.split("@")[0]} پایان یافت.`, mentions: [number] });
+                }, 5 * 60 * 1000);
+            }
+        }
+
+        // =======================
+        // منو با ویدیو
+        // =======================
+        if (text === "menu") {
+            const menuText = `
+╭─⊷ RAEES SULTAN PANJSHIRI ─
+│ ▢ Owner: پنجشیری
+│ ▢ Version: 2.0.0
+│ ▢ Type: Complete Bot
+╰────────────
+
+📌 Main Commands
+• menu    • ping    • ping2
+• uptime  • botinfo • listplugin
+• update  • request
+
+🤖 Control Bot
+• public     • private
+• addaccess  • delaccess
+• autoreact  • block
+• autotyping • autorecord
+• autobio    • setprefix
+• autostatusview
+• onlygc     • onlypc
+• unavailable • > • $
+
+🎬 Media
+• play     • playdoc
+• ytmp4    • ytvid
+• yts      • pinterestdl
+• vv       • song
+• twitterdl• tt
+• tiktok   • igdl
+• ytmp3    • video
+
+🧠 AI
+• gemma    • copilot
+
+⚡ Get
+• gethtml  • getpp
+• getplugin• save
+• gitclone • weather
+• shorturl
+
+👥 Grup
+• add      • remove
+• promote  • revoke
+• approve  • reject
+• antilinkgc • antilink
+• tagall   • hidetag
+• close    • open
+• kickall  • linkgc
+• setppgc  • setdesc
+• tagme    • warn
+• unwarn   • welcome
+• goodbye
+• disp-1   • disp-7
+• disp-90  • disp-off
+
+🛠 Tool
+• enc      • idch
+• dev
+
+🩸 Ephoto
+• glithtext     • lighteffects
+• writetext     • advancedglow
+• typographytext• pixelglitch
+• neonglitch    • flagtext
+• flag3dtext    • deletingtext
+• blackpinkstyle• glowingtex
+• underwater    • logomaker
+• cartoonstyle  • papercutstyle
+• watercolortext• effectclouds
+• blackpinklogo • gradienttext
+• luxurygold    • sandsummer
+• multicoloredneon
+• galaxywallpaper• 1917style
+• galaxystyle   • royaltext
+• freecreate
+
+🤠 Fun
+• truth    • dare
+• cry      • kill
+• happy    • hug
+• lick     • pat
+• bite     • kiss
+• bully    • bonk
+• poke     • slap
+• wink     • dance
+• cuddle   • cringe
+• blush    • smile
+• shinobu  • handhold
+• highfive • wave
+• nom      • feed
+• meow     • woof
+• lizard   • spank
+• tickle   • fox_girl
+• avatar   • goose
+• 8ball    • gecg
+
+⚽ Futbol
+• epl      • laliga
+• serie-a  • ligue-1
+• bundesliga
+
+> By پنجشیری
+`;
+
+            if (fs.existsSync("./menu.mp4")) {
+                await sock.sendMessage(from, { video: { url: "./menu.mp4" }, caption: menuText });
+            } else {
+                await sock.sendMessage(from, { text: menuText });
+            }
+        }
+
+    });
+}
+
+startBot();

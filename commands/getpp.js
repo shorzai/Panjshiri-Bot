@@ -1,46 +1,61 @@
-export default async function getpp(
-sock,
-from,
-body,
-m,
-args
-){
+export default async function getpp(sock, from, body, m, args) {
+  try {
+    const number = args[0];
 
-try{
+    // check input
+    if (!number) {
+      return sock.sendMessage(from, {
+        text: "📌 Usage: !getpp 9379xxxx"
+      });
+    }
 
-const number = args[0];
+    // sanitize number
+    const clean = number.replace(/\D/g, "");
 
-if(!number){
+    if (!clean) {
+      return sock.sendMessage(from, {
+        text: "⚠️ شماره نامعتبر است"
+      });
+    }
 
-return sock.sendMessage(from,{
-text:"📌 !getpp 9379xxxx"
-});
+    const jid = clean + "@s.whatsapp.net";
 
-}
+    let pp;
 
-const jid =
-number.replace(/\D/g,"") +
-"@s.whatsapp.net";
+    try {
+      pp = await sock.profilePictureUrl(jid, "image");
+    } catch {
+      pp = null;
+    }
 
-const pp =
-await sock.profilePictureUrl(
-jid,
-"image"
-);
+    // typing effect
+    await sock.sendPresenceUpdate("composing", from);
 
-await sock.sendMessage(from,{
-image:{ url:pp },
-caption:"📸 PROFILE"
-});
+    if (!pp) {
+      return sock.sendMessage(from, {
+        text: "❌ این کاربر پروفایل ندارد یا قابل دریافت نیست"
+      });
+    }
 
-}catch(e){
+    await sock.sendMessage(from, {
+      image: { url: pp },
+      caption: `
+📸 PROFILE FETCHED
 
-console.log(e);
+📱 Number: +${clean}
+🆔 JID: ${jid}
 
-await sock.sendMessage(from,{
-text:"❌ profile not found"
-});
+⚡ Status: Success
+`
+    });
 
-}
+    await sock.sendPresenceUpdate("available", from);
 
+  } catch (e) {
+    console.log("GetPP Error:", e);
+
+    await sock.sendMessage(from, {
+      text: "❌ خطا در دریافت پروفایل"
+    });
+  }
 }

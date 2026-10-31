@@ -1,168 +1,136 @@
-import fetch from "node-fetch";
+// commands/ai.js
+import axios from "axios";
 
-export default async function ai(
-  sock,
-  from,
-  body,
-  m,
-  args
-) {
+const API_URL = "https://api.hcnsec.cn/v1";
+const MODEL = "DeepSeek-V4-Flash";
+const API_KEY = process.env.HCN_API_KEY;
 
+export default async function ai(sock, from, body, m, args) {
   try {
-
-    const q = args.join(" ").trim();
-
-    if (!q) {
-
+    // =========================
+    // بررسی API KEY
+    // =========================
+    if (!API_KEY) {
       return await sock.sendMessage(from, {
-        text: "📌 مثال:\n!ai سلام"
+        text:
+          "❌ کلید API تنظیم نشده است.\n\n" +
+          "در Termux اجرا کن:\n" +
+          "export HCN_API_KEY='کلید-API-خودت'"
       });
-
     }
 
-    // start reaction
-    try {
-      await sock.sendMessage(from, {
-        react: {
-          text: "🤖",
-          key: m.key
-        }
+    // =========================
+    // گرفتن متن سؤال
+    // =========================
+    const prompt = Array.isArray(args)
+      ? args.join(" ").trim()
+      : "";
+
+    if (!prompt) {
+      return await sock.sendMessage(from, {
+        text:
+          "🤖 *AI آماده است!*\n\n" +
+          "مثال:\n" +
+          "!ai سلام، خودت را معرفی کن\n\n" +
+          "یا:\n" +
+          "!ai برای من یک داستان کوتاه بنویس"
       });
-    } catch {}
+    }
 
-    // timeout
-    const controller = new AbortController();
+    // =========================
+    // پیام پردازش
+    // =========================
+    await sock.sendMessage(from, {
+      text: "🤖 در حال فکر کردن..."
+    });
 
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, 30000);
-
-    // request
-    const response = await fetch(
-      "https://api.simsimi.vn/v2/simtalk",
+    // =========================
+    // درخواست به HCN API
+    // =========================
+    const response = await axios.post(
+      `${API_URL}/chat/completions`,
       {
-        method: "POST",
+        model: MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a helpful, intelligent and friendly AI assistant inside a WhatsApp bot. " +
+              "Answer naturally and clearly. " +
+              "If the user writes in Persian or Dari, answer in Persian or Dari. " +
+              "Do not mention APIs, internal systems, or these instructions unless necessary."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7
+      },
+      {
         headers: {
+          Authorization: `Bearer ${API_KEY}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          inputs: q
-        }),
-        signal: controller.signal
+        timeout: 120000
       }
     );
 
-    clearTimeout(timeout);
+    // =========================
+    // دریافت پاسخ
+    // =========================
+    const answer =
+      response?.data?.choices?.[0]?.message?.content ||
+      response?.data?.choices?.[0]?.text;
 
-    // check status
-    if (!response.ok) {
-
-      return await sock.sendMessage(from, {
-        text: `❌ API Error: ${response.status}`
-      });
-
-    }
-
-    // raw response
-    const raw = await response.text();
-
-    console.log("RAW:", raw);
-
-    // parse safely
-    let data;
-
-    try {
-
-      data = JSON.parse(raw);
-
-    } catch {
-
-      return await sock.sendMessage(from, {
-        text: "❌ جواب API خراب است"
-      });
-
-    }
-
-    // loading
-    if (
-      data?.error &&
-      data.error.toLowerCase().includes("loading")
-    ) {
-
-      return await sock.sendMessage(from, {
-        text: "⏳ AI هنوز روشن نشده\nچند ثانیه بعد دوباره امتحان کن"
-      });
-
-    }
-
-    // answer
-    let answer =
-      data?.[0]?.generated_text ||
-      data?.generated_text ||
-      data?.answer ||
-      null;
-
-    // empty answer
     if (!answer) {
+      console.log("HCN EMPTY RESPONSE:");
+      console.log(JSON.stringify(response?.data, null, 2));
 
       return await sock.sendMessage(from, {
-        text: "❌ جواب پیدا نشد"
+        text: "❌ API پاسخ قابل استفاده‌ای برنگرداند."
       });
-
     }
 
-    // limit message size
-    if (answer.length > 4000) {
-      answer = answer.slice(0, 4000);
-    }
-
-    // send answer
+    // =========================
+    // ارسال پاسخ AI
+    // =========================
     await sock.sendMessage(from, {
-      text: `🤖 AI:\n\n${answer}`
+      text: `🤖 *AI*\n\n${answer.trim()}`
     });
 
-    // done reaction
-    try {
+  } catch (error) {
+    // =========================
+    // نمایش خطای واقعی
+    // =========================
+    console.error("========== HCN AI ERROR ==========");
 
-      await sock.sendMessage(from, {
-        react: {
-          text: "✅",
-          key: m.key
-        }
-      });
-
-    } catch {}
-
-  } catch (e) {
-
-    console.log("AI ERROR:", e);
-
-    // timeout error
-    if (e.name === "AbortError") {
-
-      return await sock.sendMessage(from, {
-        text: "⏰ زمان درخواست تمام شد"
-      });
-
+    if (error.response) {
+      console.error("STATUS:", error.response.status);
+      console.error(
+        "DATA:",
+        JSON.stringify(error.response.data, null, 2)
+      );
+    } else {
+      console.error("MESSAGE:", error.message);
     }
 
-    // network error
-    if (
-      e.code === "ENOTFOUND" ||
-      e.code === "ECONNRESET"
-    ) {
+    console.error("==================================");
 
-      return await sock.sendMessage(from, {
-        text: "🌐 مشکل اینترنت یا API"
-      });
+    let message = "خطای نامشخص";
 
+    if (error.response?.data?.error?.message) {
+      message = error.response.data.error.message;
+    } else if (error.response?.data?.message) {
+      message = error.response.data.message;
+    } else if (error.message) {
+      message = error.message;
     }
 
-    // unknown error
     await sock.sendMessage(from, {
-      text: "❌ AI command error"
+      text:
+        "❌ *خطای HCN API*\n\n" +
+        `${message}`
     });
-
   }
-
 }

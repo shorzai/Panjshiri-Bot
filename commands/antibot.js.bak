@@ -1,0 +1,68 @@
+import { getDB, saveDB } from "../lib/db.js";
+
+export default async function antibotCommand(sock, from, body){
+
+const db = getDB();
+
+db.settings ??= {};
+db.settings[from] ??= {};
+
+const cmd = body.trim().toLowerCase();
+
+
+if(cmd === "!antibot on"){
+
+db.settings[from].antibot = true;
+
+saveDB(db);
+
+return sock.sendMessage(from,{
+text:
+"🤖 AntiBot فعال شد\n\nربات‌های ناشناس هنگام ورود حذف می‌شوند."
+});
+
+}
+
+
+
+if(cmd === "!antibot off"){
+
+db.settings[from].antibot = false;
+
+saveDB(db);
+
+return sock.sendMessage(from,{
+text:
+"❌ AntiBot خاموش شد"
+});
+
+}
+
+
+
+if(cmd === "!antibot"){
+
+return sock.sendMessage(from,{
+text:
+`
+🤖 AntiBot
+
+وضعیت:
+${
+db.settings[from].antibot
+?
+"🟢 فعال"
+:
+"🔴 خاموش"
+}
+
+دستورات:
+
+!antibot on
+!antibot off
+`
+});
+
+}
+
+}

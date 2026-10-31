@@ -1,0 +1,249 @@
+import time
+import random
+import sys
+import json
+import requests
+from typing import List
+
+# ASCII Art Banners
+BANNER = r"""
+  _____                     _ _   ___  
+ / ____|                   (_) | |__ \ 
+| |  __  ___ _ __ ___ _ __  _| |_   ) |
+| | |_ |/ _ \ '__/ _ \ '_ \| | __| / / 
+| |__| |  __/ | |  __/ | | | | |_ / /_ 
+ \_____|\___|_|  \___|_| |_|_|\__|____|
+                                      
+"""
+
+NAME_BANNER = r"""
+ _   _  _____  _____  _    _ ______ _______ 
+| \ | |/ ____|/ ____|| |  | |  ____|__   __|
+|  \| | (___ | |  __ | |__| | |__     | |   
+| . ` |\___ \| | |_ ||  __  |  __|    | |   
+| |\  |____) | |__| || |  | | |____   | |   
+|_| \_|_____/ \_____||_|  |_|______|  |_|
+"""
+
+# Progress bar animation
+def progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=50, fill='█', print_end="\r"):
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filled_length = int(length * iteration // total)
+    bar = fill * filled_length + '-' * (length - filled_length)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=print_end)
+    if iteration == total: 
+        print()
+
+# Simulated loading animation
+def loading_animation(duration=3):
+    animation = "|/-\\"
+    idx = 0
+    start_time = time.time()
+    while time.time() - start_time < duration:
+        print(f"\r[INFO] Loading... {animation[idx % len(animation)]}", end="")
+        sys.stdout.flush()
+        time.sleep(0.1)
+        idx += 1
+    print()
+
+# Simulated AI processing animation
+def ai_processing_animation():
+    tasks = ["Initializing Gemini API", "Establishing secure connection", "Loading model parameters", 
+             "Validating API key", "Preparing context", "Generating response"]
+    
+    print("\n[+] AI Processing Started:")
+    for i, task in enumerate(tasks):
+        print(f"\n[+] {task}...", end="")
+        time.sleep(0.5)
+        progress_bar(i + 1, len(tasks), prefix='Progress:', suffix='Complete', length=30)
+    print()
+
+# Main Gemini AI tool using direct HTTP requests
+class GeminiAITool:
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.history = []
+        self.model_name = None
+        self.base_url = "https://generativelanguage.googleapis.com/v1beta"
+        
+    def list_models(self):
+        """List available models to find the correct one"""
+        url = f"{self.base_url}/models?key={self.api_key}"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                models = response.json().get('models', [])
+                # Find a suitable gemini model
+                for model in models:
+                    if 'gemini' in model['name'].lower() and 'generateContent' in model.get('supportedGenerationMethods', []):
+                        self.model_name = model['name'].split('/')[-1]  # Extract model name
+                        print(f"[INFO] Using model: {self.model_name}")
+                        return True
+                # Fallback to first gemini model
+                for model in models:
+                    if 'gemini' in model['name'].lower():
+                        self.model_name = model['name'].split('/')[-1]
+                        print(f"[INFO] Using model: {self.model_name}")
+                        return True
+                print("[ERROR] No suitable Gemini model found")
+                return False
+            else:
+                print(f"[ERROR] Failed to list models: {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"[ERROR] Exception while listing models: {str(e)}")
+            return False
+    
+    def send_prompt(self, prompt: str) -> str:
+        if not self.model_name:
+            if not self.list_models():
+                return "[ERROR] Could not determine model to use"
+        
+        url = f"{self.base_url}/models/{self.model_name}:generateContent?key={self.api_key}"
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "contents": [{
+                "parts": [{
+                    "text": prompt
+                }]
+            }]
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            if response.status_code == 200:
+                result = response.json()
+                # Extract the response text correctly
+                ai_response = result['candidates'][0]['content']['parts'][0]['text']
+                self.history.append({"prompt": prompt, "response": ai_response})
+                return ai_response
+            else:
+                return f"[ERROR] API Error: {response.status_code} - {response.text}"
+        except Exception as e:
+            return f"[ERROR] Failed to generate response: {str(e)}"
+    
+    def show_history(self):
+        if not self.history:
+            print("[INFO] No conversation history")
+            return
+        
+        print("\n[+] Conversation History:")
+        for i, entry in enumerate(self.history, 1):
+            print(f"\n--- Prompt {i} ---")
+            print(f"Q: {entry['prompt']}")
+            print(f"A: {entry['response'][:200]}...")  # Truncate for display
+            
+    def clear_history(self):
+        self.history = []
+        print("[INFO] Conversation history cleared")
+
+# Encoder/Decoder section (as requested)
+def encode_string(text: str) -> str:
+    """Simple encoding function to make it difficult to decode"""
+    encoded = ""
+    for char in text:
+        encoded += str(ord(char) * 3 + 7) + " "
+    return encoded.strip()
+
+def decode_string(encoded: str) -> str:
+    """Decoder function"""
+    try:
+        numbers = encoded.split(" ")
+        decoded = ""
+        for num in numbers:
+            if num:
+                decoded += chr(int((int(num) - 7) / 3))
+        return decoded
+    except:
+        return "[ERROR] Decoding failed"
+
+# Main execution
+def main():
+    # Display banners
+    print(BANNER)
+    print(NAME_BANNER)
+    print("=" * 60)
+    print("TOOL MADE BY @weareunlimitedtech")
+    print("JOIN @weareunlimitedtech")
+    print("=" * 60)
+    
+    # Get API key from user
+    api_key = input("\n[+] Enter your Gemini API key: ").strip()
+    if not api_key:
+        print("[ERROR] API key is required!")
+        return
+    
+    # Initialize tool
+    print("\n[+] Initializing Gemini AI Tool...")
+    loading_animation(2)
+    
+    tool = GeminiAITool(api_key)
+    if not tool.list_models():
+        print("[ERROR] Failed to initialize models. Check your API key and network connection.")
+        return
+    
+    print("[SUCCESS] Gemini AI Tool initialized successfully!")
+    
+    # Main interaction loop
+    while True:
+        print("\n" + "="*50)
+        print("[1] Send Prompt to Gemini")
+        print("[2] View Conversation History")
+        print("[3] Clear History")
+        print("[4] Encode Text")
+        print("[5] Decode Text")
+        print("[6] Exit")
+        print("="*50)
+        
+        choice = input("\n[+] Select an option (1-6): ").strip()
+        
+        if choice == "1":
+            prompt = input("\n[+] Enter your prompt: ")
+            if prompt:
+                print("[+] Sending prompt to Gemini...")
+                ai_processing_animation()
+                response = tool.send_prompt(prompt)
+                print(f"\n[RESPONSE]\n{response}")
+            else:
+                print("[INFO] Empty prompt ignored")
+                
+        elif choice == "2":
+            tool.show_history()
+            
+        elif choice == "3":
+            confirm = input("[CONFIRM] Clear all history? (y/N): ").strip().lower()
+            if confirm == "y":
+                tool.clear_history()
+            else:
+                print("[INFO] History not cleared")
+                
+        elif choice == "4":
+            text = input("\n[+] Enter text to encode: ")
+            if text:
+                encoded = encode_string(text)
+                print(f"[ENCODED] {encoded}")
+            else:
+                print("[INFO] Empty text ignored")
+                
+        elif choice == "5":
+            encoded_text = input("\n[+] Enter encoded text to decode: ")
+            if encoded_text:
+                decoded = decode_string(encoded_text)
+                print(f"[DECODED] {decoded}")
+            else:
+                print("[INFO] Empty text ignored")
+                
+        elif choice == "6":
+            print("[+] Exiting Gemini AI Tool. Goodbye!")
+            break
+            
+        else:
+            print("[ERROR] Invalid option selected")
+
+if __name__ == "__main__":
+    main()
+

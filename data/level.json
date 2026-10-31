@@ -1,0 +1,14 @@
+{
+  "users": {
+    "example@s.whatsapp.net": {
+      "name": "Player",
+      "xp": 0,
+      "level": 1,
+      "messages": 0,
+      "coins": 0,
+      "rank": "Newbie",
+      "lastClaim": 0,
+      "lastDaily": 0
+    }
+  }
+}

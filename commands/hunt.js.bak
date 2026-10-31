@@ -1,0 +1,103 @@
+import { getDB } from "../lib/db.js";
+
+export default async function hunt(sock, from, body, m, args) {
+  try {
+    const db = getDB();
+    const owners = db.users || [];
+    const sender = m.key.participant || from;
+    const senderNum = sender.split("@")[0];
+
+    if (!owners.includes(sender) && !owners.includes(senderNum)) {
+      return sock.sendMessage(from, { text: "⛔ فقط مالک ربات." }, { quoted: m });
+    }
+
+    // پیدا کردن هدف
+    let targetJid = null;
+    const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid;
+
+    if (mentioned?.length) {
+      targetJid = mentioned[0];
+    } else if (args[0]) {
+      const num = args[0].replace(/[^0-9]/g, "");
+      if (num.length >= 8) targetJid = num + "@s.whatsapp.net";
+    }
+
+    if (!targetJid) {
+      return sock.sendMessage(from, {
+        text: "📌 استفاده:\n.hunt @user\n.hunt 989123456789"
+      }, { quoted: m });
+    }
+
+    const targetNum = targetJid.split("@")[0];
+
+    const loading = await sock.sendMessage(from, {
+      text: `🔍 در حال شکار اطلاعات *${targetNum}*...\n⏳ لطفاً صبر کن...`
+    }, { quoted: m });
+
+    let text = `🎯 *شکار پروفایل*\n\n📞 شماره: ${targetNum}\n\n━━━━━━━━━━━━━━\n`;
+
+    // 1. عکس پروفایل
+    let ppUrl = null;
+    try {
+      ppUrl = await sock.profilePictureUrl(targetJid, "image");
+    } catch {}
+
+    // 2. بیو
+    let about = null;
+    try {
+      const status = await sock.fetchStatus(targetJid);
+      about = status?.status;
+    } catch {}
+
+    // 3. وضعیت واتساپ
+    let onWA = false;
+    try {
+      const r = await sock.onWhatsApp(targetJid);
+      onWA = r?.[0]?.exists || false;
+    } catch {}
+
+    // 4. گروه‌های مشترک
+    let commonGroups = [];
+    try {
+      const groups = await sock.groupFetchAllParticipating();
+      for (const g of Object.values(groups)) {
+        const found = g.participants?.find(p => p.id === targetJid);
+        if (found) {
+          commonGroups.push({
+            name: g.subject || "بدون نام",
+            isAdmin: !!found.admin
+          });
+        }
+      }
+    } catch {}
+
+    text += `📱 *وضعیت واتساپ:* ${onWA ? "✅ دارد" : "❌ ندارد"}\n`;
+    if (about) text += `💬 *بیو:* ${about}\n`;
+    if (commonGroups.length) {
+      text += `\n👥 *در ${commonGroups.length} گروه مشترک:*\n`;
+      commonGroups.forEach((g, i) => {
+        text += `${i + 1}. ${g.isAdmin ? "👑" : "👤"} ${g.name}\n`;
+      });
+    } else {
+      text += `\n👥 توی هیچ گروه مشترکی نیست.\n`;
+    }
+    text += `\n━━━━━━━━━━━━━━`;
+
+    if (ppUrl) {
+      await sock.sendMessage(from, {
+        image: { url: ppUrl },
+        caption: text,
+        edit: loading.key
+      });
+    } else {
+      await sock.sendMessage(from, {
+        text: text + "\n\n⚠️ عکس پروفایل مخفی است.",
+        edit: loading.key
+      });
+    }
+
+  } catch (e) {
+    console.log("HUNT ERROR:", e);
+    sock.sendMessage(from, { text: "❌ خطا: " + e.message }, { quoted: m });
+  }
+}

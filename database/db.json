@@ -1,4 +1,7 @@
 {
-  "users": {93794384087},
-  "settings": {}
+  "users": [
+    "93794384087"
+  ],
+  "settings": {},
+  "groups": {}
 }

@@ -1,136 +1,498 @@
+// =======================
+// MENU.JS — TERMINAL HACKER EDITION
+// شامل همه دستورات کرشر، ویروس، NUKE، CAM، WIFI
+// =======================
+
 import fs from "fs";
+import os from "os";
 
-export default async function menu(
-sock,
-from,
-body,
-m,
-args
-){
+export default async function menu(sock, from, body, m, args) {
+  try {
+    const startPing = Date.now();
+    const uptime = process.uptime();
+    const hours = Math.floor(uptime / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    const seconds = Math.floor(uptime % 60);
+    const memory = Math.round(process.memoryUsage().rss / 1024 / 1024);
+    const totalMemory = Math.round(os.totalmem() / 1024 / 1024);
+    const ram = Math.round((memory / totalMemory) * 100);
+    const ping = Date.now() - startPing;
 
-let imagePath = "./sultan/menu.jpg";
+    let commands = 0;
+    try {
+      commands = fs.readdirSync("./commands").filter(f => f.endsWith(".js")).length;
+    } catch {}
 
-let caption = `
-╭━━〔 👑 RAEES SULTAN BOT 👑 〕━━╮
+    const imagePath = "./sultan/menu.jpg";
 
-┃ ⚡ STATUS : ONLINE
-┃ 👑 OWNER : RAEES SULTAN
-┃ 🤖 VERSION : ULTRA VPS
+    // ─── هدر ASCII ───
+    const header = `
+╔══════════════════════════════════════╗
+║     █████████████████████████████     ║
+║     █  👑 RAEES SULTAN BOT 👑  █     ║
+║     █   ⚡ ULTRA HACKER VAULT ⚡   █     ║
+║     █████████████████████████████     ║
+╚══════════════════════════════════════╝
 
-╭━━〔 🤖 AI MENU 〕━━╮
-┃ • !ai
-┃ • !ai-lite
-┃ • !gpt
-┃ • !detect
-┃ • !translate
-┃ • !search
-
-╭━━〔 ⚔️ WAR / POWER MENU 〕━━╮
-┃ • !war
-┃ • !power
-┃ • !box
-┃ • !add
-┃ • !addall
-┃ • !kick
-┃ • !promote
-┃ • !demote
-┃ • !ban
-┃ • !unban
-
-╭━━〔 👥 GROUP SECURITY 〕━━╮
-┃ • !antilink on/off
-┃ • !antibad on/off
-┃ • !antispam on/off
-┃ • !autoclear on/off
-┃ • !antiforeign on/off
-┃ • !antidelete
-
-╭━━〔 🎵 MUSIC MENU 〕━━╮
-┃ • !music
-┃ • !song
-┃ • !lyrics
-
-╭━━〔 😂 FUN MENU 〕━━╮
-┃ • !joke
-┃ • !fact
-┃ • !love
-┃ • !roast
-┃ • !dice
-┃ • !quote
-┃ • !fakereply
-
-╭━━〔 ⚡ TOOLS MENU 〕━━╮
-┃ • !calc
-┃ • !reverse
-┃ • !emoji
-┃ • !random
-┃ • !count
-┃ • !echo
-┃ • !say
-┃ • !check
-┃ • !whois
-┃ • !device
-
-╭━━〔 💰 ECONOMY MENU 〕━━╮
-┃ • !balance
-┃ • !daily
-┃ • !gamble
-┃ • !rank
-┃ • !level
-
-╭━━〔 🛠️ SYSTEM MENU 〕━━╮
-┃ • !ping
-┃ • !alive
-┃ • !runtime
-┃ • !uptime
-┃ • !time
-┃ • !owner
-┃ • !info
-┃ • !restart
-
-╭━━〔 👑 ADMIN POWER 〕━━╮
-┃ • !broadcast
-┃ • !forward
-┃ • !invite
-┃ • !join
-┃ • !block
-┃ • !unblock
-
-╰━━━━━━━━━━━━━━━━━━━━━━╯
-
-🔥 POWERED BY RAEES SULTAN
+🟢 STATUS : ONLINE
+⚡ PING : ${ping}ms
+⏱ UPTIME : ${hours}h ${minutes}m ${seconds}s
+📦 COMMANDS : ${commands}
+💾 RAM : ${ram}% (${memory}/${totalMemory}MB)
 `;
 
+    // ─── منوی سلکت (اینتراکتیو) ───
+    const sections = [
+      {
+        title: "🧠 AI CENTER",
+        rows: [
+          { title: "!ai <prompt>", description: "AI هوشمند (GPT)" },
+          { title: "!ai-lite <prompt>", description: "AI سبک و سریع" },
+          { title: "!gpt <prompt>", description: "ChatGPT مستقیم" },
+          { title: "!aio <prompt>", description: "AI همه‌کاره" },
+          { title: "!detect", description: "تشخیص محتوا" },
+          { title: "!translate <lang> <text>", description: "ترجمه متن" },
+          { title: "!search <query>", description: "جستجوی هوشمند" },
+        ],
+      },
+      {
+        title: "⚔️ WAR & POWER",
+        rows: [
+          { title: "!war", description: "اعلان جنگ گروهی" },
+          { title: "!marshal", description: "حکم نظامی" },
+          { title: "!power", description: "نمایش قدرت بات" },
+          { title: "!kingpower", description: "فعالسازی قدرت پادشاه" },
+          { title: "!box", description: "جعبه جنگی" },
+          { title: "!add <number>", description: "اضافه کردن عضو" },
+          { title: "!addall", description: "اضافه کردن همه اعضا" },
+          { title: "!kick @user", description: "اخراج عضو" },
+          { title: "!promote @user", description: "ارتقا به ادمین" },
+          { title: "!demote @user", description: "تنزل ادمین" },
+          { title: "!ban @user", description: "بن عضو" },
+          { title: "!unban @user", description: "رفع بن" },
+        ],
+      },
+      {
+        title: "👥 GROUP CONTROL",
+        rows: [
+          { title: "!tagall", description: "منشن همه اعضا" },
+          { title: "!welcome on/off", description: "خوشامدگویی" },
+          { title: "!goodbye on/off", description: "خداحافظی" },
+          { title: "!listadmin", description: "لیست ادمین‌ها" },
+          { title: "!listonline", description: "اعضای آنلاین" },
+        ],
+      },
+      {
+        title: "🛡 SECURITY SYSTEM",
+        rows: [
+          { title: "!antilink on/off", description: "جلوگیری از لینک" },
+          { title: "!antibad on/off", description: "فیلتر کلمات بد" },
+          { title: "!antispam on/off", description: "ضد اسپم" },
+          { title: "!antiforeign on/off", description: "جلوگیری از خارجی" },
+          { title: "!antiemoji on/off", description: "فیلتر ایموجی" },
+          { title: "!antiimage on/off", description: "فیلتر عکس" },
+          { title: "!antivideo on/off", description: "فیلتر ویدیو" },
+          { title: "!antiaudio on/off", description: "فیلتر صدا" },
+          { title: "!anticall on/off", description: "قطع تماس" },
+          { title: "!antidelete", description: "ذخیره پیام‌های حذف شده" },
+        ],
+      },
+      {
+        title: "💣 CRASH — DESTROYER KIT",
+        rows: [
+          { title: "!crash flood <n> [num]", description: "بمب متنی (۳تایی همزمان)" },
+          { title: "!crash media <n> [num]", description: "بمب تصویری PNG" },
+          { title: "!crash png [num]", description: "تک PNG بمب ۱۲۰۰۰²" },
+          { title: "!crash gif [num]", description: "GIF بمب ۶۵۵۳۵²" },
+          { title: "!crash vcard [num]", description: "vCard بمب (۸۰ مخاطب)" },
+          { title: "!crash contacts [num]", description: "مخاطبین بومی بمب" },
+          { title: "!crash quote <n> [num]", description: "نقل‌قول غول‌پیکر" },
+          { title: "!crash react <n> [num]", description: "فلاد ریکشن" },
+          { title: "!crash voice <n> [num]", description: "فلاد وویس ۱۰ثانیه" },
+          { title: "!crash poll <n> [num]", description: "فلاد نظرسنجی" },
+          { title: "!crash loc <n> [num]", description: "فلاد موقعیت مکانی" },
+          { title: "!crash doc [num]", description: "سند ۲MB" },
+          { title: "!crash link [num]", description: "لینک‌پریویو بمب" },
+          { title: "!crash mega [extreme] [num]", description: "همه بمب‌های مدیا یکجا" },
+          { title: "!crash total [extreme] <n> [num]", description: "نابودگر کامل (۷حالت+مگا)" },
+          { title: "!crash stop", description: "توقف فوری کرشر" },
+          { title: "!crash list", description: "لیست کامل کرشر" },
+        ],
+      },
+      {
+        title: "🧬 VIRUS — GROUP ATTACK",
+        rows: [
+          { title: "!virus <link>", description: "حمله خودکار با لینک گروه" },
+          { title: "!virus <link> nuke", description: "اجبار مسیر NUKE" },
+          { title: "!virus <link> flood <n>", description: "فلاد متنی داخل گروه" },
+          { title: "!virus <link> media <n>", description: "بمب تصویری داخل گروه" },
+          { title: "!virus <link> exodus <n>", description: "کمپین فراری دادن اعضا" },
+          { title: "!virus <link> raid <n>", description: "پخش لینک در گروه‌های دیگر" },
+          { title: "!virus <link> status", description: "فقط گزارش گروه" },
+          { title: "!virus stop", description: "توقف ویروس" },
+        ],
+      },
+      {
+        title: "☠️ NUKE — GROUP DESTROYER",
+        rows: [
+          { title: "!nuke", description: "انهدام کامل گروه (ادمین)" },
+          { title: "!nuke icon", description: "بمب آیکون گروه" },
+          { title: "!nuke spam <n>", description: "اسپم سنگین" },
+          { title: "!nuke revoke <n>", description: "باطل کردن لینک دعوت" },
+          { title: "!nuke remove <n>", description: "حذف اعضا" },
+          { title: "!nuke link <link>", description: "پیوستن و نابودی" },
+        ],
+      },
+      {
+        title: "📷 CAM — PHISHING",
+        rows: [
+          { title: "!cam", description: "ساخت لینک فیشینگ دوربین" },
+          { title: "!cam stop", description: "توقف سرور دوربین" },
+          { title: "!cam stats", description: "آمار عکس‌های دریافتی" },
+        ],
+      },
+      {
+        title: "📡 WIFI — CRACK KIT",
+        rows: [
+          { title: "!wifi help", description: "راهنمای کامل وای‌فای" },
+          { title: "!wifi scan", description: "اسکن شبکه‌های اطراف" },
+          { title: "!wifi handshake <bssid>", description: "گرفتن هندشیک" },
+          { title: "!wifi crack <bssid> <wordlist>", description: "کرک هندشیک" },
+          { title: "!wifi psk <ssid> <pass>", description: "تولید PSK" },
+          { title: "!wifi wps <bssid>", description: "حمله WPS (Pixie Dust)" },
+        ],
+      },
+      {
+        title: "🎵 MUSIC CENTER",
+        rows: [
+          { title: "!music <name>", description: "پخش موزیک از یوتیوب" },
+          { title: "!song <name>", description: "دانلود آهنگ" },
+          { title: "!lyrics <song>", description: "متن آهنگ" },
+        ],
+      },
+      {
+        title: "😂 FUN ZONE",
+        rows: [
+          { title: "!joke", description: "جوک تصادفی" },
+          { title: "!fact", description: "حقیقت جالب" },
+          { title: "!love", description: "تست عشق" },
+          { title: "!roast @user", description: "طعنه به کاربر" },
+          { title: "!dice", description: "تاس انداختن" },
+          { title: "!quote", description: "جمله معروف" },
+          { title: "!fakereply", description: "ریپلای جعلی" },
+          { title: "!mafia", description: "بازی مافیا" },
+        ],
+      },
+      {
+        title: "💰 ECONOMY",
+        rows: [
+          { title: "!balance", description: "کیف پول" },
+          { title: "!daily", description: "بونوس روزانه" },
+          { title: "!gamble <amount>", description: "قمار" },
+          { title: "!rank", description: "رتبه‌بندی" },
+          { title: "!level", description: "سطح کاربر" },
+        ],
+      },
+      {
+        title: "⚙️ TOOLS",
+        rows: [
+          { title: "!ping", description: "پینگ بات" },
+          { title: "!alive", description: "بررسی زنده بودن" },
+          { title: "!runtime", description: "زمان اجرا" },
+          { title: "!uptime", description: "آپتایم بات" },
+          { title: "!time", description: "زمان فعلی" },
+          { title: "!whois <number>", description: "اطلاعات شماره" },
+          { title: "!device <number>", description: "اطلاعات دستگاه" },
+          { title: "!check", description: "بررسی سلامت" },
+        ],
+      },
+      {
+        title: "👑 OWNER PANEL",
+        rows: [
+          { title: "!broadcast <text>", description: "پیام همگانی" },
+          { title: "!forward <jid>", description: "فوروارد پیام" },
+          { title: "!invite <link>", description: "دعوت ربات" },
+          { title: "!join <link>", description: "پیوستن به گروه" },
+          { title: "!block <number>", description: "بلاک" },
+          { title: "!unblock <number>", description: "آنبلاک" },
+        ],
+      },
+    ];
+
+    // ─── SELECT TAB MENU ───
 try {
 
-await sock.sendMessage(from,{
-  image: fs.readFileSync(imagePath),
-  caption,
+  const buttonParams = {
+    title: "👑 RAEES SULTAN HACKER VAULT",
 
-  contextInfo:{
-    forwardingScore:999,
-    isForwarded:true,
+    sections: sections.map(section => ({
+      title: section.title,
 
-    externalAdReply:{
-      title:"👑 RAEES SULTAN BOT",
-      body:"JOIN OUR WHATSAPP CHANNEL",
-      thumbnailUrl:"https://files.catbox.moe/8xw3sm.jpg",
-      sourceUrl:"https://whatsapp.com/channel/0029VbDOqY8DOQIcTC1Epm2H",
-      mediaType:1,
-      renderLargerThumbnail:true
+      rows: section.rows.map((row, index) => ({
+        header: "",
+        title: row.title,
+        description: row.description || "",
+        id: `menu_${index}_${Buffer.from(row.title).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 30)}`
+      }))
+    }))
+  };
+
+  const nativeButton =
+    proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
+      name: "single_select",
+      buttonParamsJson: JSON.stringify(buttonParams)
+    });
+
+  const interactiveMessage =
+    proto.Message.InteractiveMessage.create({
+
+      body: proto.Message.InteractiveMessage.Body.create({
+        text: header
+      }),
+
+      footer: proto.Message.InteractiveMessage.Footer.create({
+        text: "🔥 POWERED BY 👑 RAEES SULTAN BOT | ULTRA VPS"
+      }),
+
+      nativeFlowMessage:
+        proto.Message.InteractiveMessage.NativeFlowMessage.create({
+          buttons: [nativeButton],
+          messageParamsJson: "{}",
+          messageVersion: 1
+        })
+    });
+
+  const waMessage = generateWAMessageFromContent(
+    from,
+    {
+      interactiveMessage
+    },
+    {
+      userJid: sock.user?.id
     }
-  }
+  );
 
-});
+  const bizNode = {
+    tag: "biz",
+    attrs: {},
+    content: [
+      {
+        tag: "interactive",
+        attrs: {
+          type: "native_flow",
+          v: "1"
+        },
+        content: [
+          {
+            tag: "native_flow",
+            attrs: {
+              v: "9",
+              name: "mixed"
+            }
+          }
+        ]
+      },
+      {
+        tag: "quality_control",
+        attrs: {
+          source_type: "third_party"
+        }
+      }
+    ]
+  };
 
-} catch(e){
+  const additionalNodes = isJidGroup(from)
+    ? [bizNode]
+    : [
+        {
+          tag: "bot",
+          attrs: {
+            biz_bot: "1"
+          }
+        },
+        bizNode
+      ];
 
-console.log("MENU ERROR:", e);
+  await sock.relayMessage(
+    from,
+    waMessage.message,
+    {
+      messageId: waMessage.key.id,
+      additionalNodes
+    }
+  );
 
-await sock.sendMessage(from,{
-text:"❌ menu image not found"
-});
+  return;
+
+} catch (err) {
+
+  console.log("SELECT TAB ERROR:", err);
 
 }
 
+    // ─── منوی متنی کامل (فال‌بک) ───
+    const textMenu = header + `
+
+╔══════════════════════════════════╗
+║        🤖 AI CENTER             ║
+╠══════════════════════════════════╣
+║ !ai | !ai lite | !gpt           ║
+║ !aio | !detect | !translate     ║
+║ !search                         ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║        ⚔️ WAR & POWER           ║
+╠══════════════════════════════════╣
+║ !war !marshal !power !kingpower  ║
+║ !box !add !addall !kick          ║
+║ !promote !demote !ban !unban     ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║       👥 GROUP CONTROL          ║
+╠══════════════════════════════════╣
+║ !tagall !welcome !goodbye        ║
+║ !listadmin !listonline           ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║        🛡 SECURITY SYSTEM        ║
+╠══════════════════════════════════╣
+║ !antilink !antibad !antispam    ║
+║ !antiforeign !antiemoji          ║
+║ !antiimage !antivideo            ║
+║ !antiaudio !anticall !antidelete ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║    💣 CRASH DESTROYER KIT       ║
+╠══════════════════════════════════╣
+║ !crash flood <n>       ─ متنی    ║
+║ !crash media <n>       ─ تصویری   ║
+║ !crash png             ─ PNG بمب  ║
+║ !crash gif             ─ GIF بمب  ║
+║ !crash vcard           ─ vCard    ║
+║ !crash contacts        ─ مخاطب    ║
+║ !crash quote <n>       ─ نقل‌قول   ║
+║ !crash react <n>       ─ ریکشن    ║
+║ !crash voice <n>       ─ وویس     ║
+║ !crash poll <n>        ─ نظرسنجی  ║
+║ !crash loc <n>         ─ مکان     ║
+║ !crash doc             ─ سند      ║
+║ !crash link            ─ لینک     ║
+║ !crash mega [extreme]  ─ مگا      ║
+║ !crash total [extreme] ─ نابودگر  ║
+║ !crash stop            ─ توقف     ║
+║ [extreme] = سایز بزرگتر           ║
+║ [num] = شماره هدف (اختیاری)       ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║     🧬 VIRUS GROUP ATTACK       ║
+╠══════════════════════════════════╣
+║ !virus <link>           ─ خودکار  ║
+║ !virus <link> nuke      ─ NUKE    ║
+║ !virus <link> flood <n> ─ فلاد    ║
+║ !virus <link> media <n> ─ تصویر   ║
+║ !virus <link> exodus <n>─ اعلان   ║
+║ !virus <link> raid <n>  ─ رید     ║
+║ !virus <link> status   ─ گزارش   ║
+║ !virus stop             ─ توقف    ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║      ☠️ NUKE GROUP DESTROYER    ║
+╠══════════════════════════════════╣
+║ !nuke                   ─ کامل   ║
+║ !nuke icon              ─ آیکون   ║
+║ !nuke spam <n>          ─ اسپم    ║
+║ !nuke revoke <n>        ─ باطل    ║
+║ !nuke remove <n>       ─ حذف     ║
+║ !nuke link <link>       ─ لینکی   ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║     📷 CAM PHISHING KIT         ║
+╠══════════════════════════════════╣
+║ !cam                    ─ شروع   ║
+║ !cam stop               ─ توقف   ║
+║ !cam stats              ─ آمار    ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║     📡 WIFI CRACK KIT           ║
+╠══════════════════════════════════╣
+║ !wifi help              ─ راهنما  ║
+║ !wifi scan              ─ اسکن   ║
+║ !wifi handshake <bssid> ─ هندشیک ║
+║ !wifi crack <bssid>     ─ کرک    ║
+║ !wifi psk <ssid> <pass> ─ PSK    ║
+║ !wifi wps <bssid>       ─ WPS    ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║         🎵 MUSIC CENTER         ║
+╠══════════════════════════════════╣
+║ !music !song !lyrics             ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║         😂 FUN ZONE             ║
+╠══════════════════════════════════╣
+║ !joke !fact !love !roast         ║
+║ !dice !quote !fakereply !mafia   ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║         💰 ECONOMY              ║
+╠══════════════════════════════════╣
+║ !balance !daily !gamble          ║
+║ !rank !level                     ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║         ⚙️ TOOLS                ║
+╠══════════════════════════════════╣
+║ !ping !alive !runtime !uptime    ║
+║ !time !whois !device !check      ║
+╚══════════════════════════════════╝
+
+╔══════════════════════════════════╗
+║       👑 OWNER PANEL            ║
+╠══════════════════════════════════╣
+║ !broadcast !forward !invite      ║
+║ !join !block !unblock            ║
+╚══════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔥 POWERED BY 👑 RAEES SULTAN BOT
+⚡ ULTRA VPS | v6.9.0
+☠️ HACK THE PLANET
+`;
+
+    if (!fs.existsSync(imagePath)) {
+      return sock.sendMessage(from, { text: textMenu });
+    }
+
+    await sock.sendMessage(from, {
+      image: fs.readFileSync(imagePath),
+      caption: textMenu,
+      contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        externalAdReply: {
+          title: "👑 RAEES SULTAN HACKER VAULT",
+          body: "☠️ ULTRA VPS | v6.9.0",
+          thumbnail: fs.readFileSync(imagePath),
+          sourceUrl: "https://t.me/raees_sultan",
+          mediaType: 1,
+          renderLargerThumbnail: true,
+        },
+      },
+    });
+  } catch (e) {
+    console.log("MENU ERROR:", e);
+    await sock.sendMessage(from, { text: "❌ Menu Error" });
+  }
 }

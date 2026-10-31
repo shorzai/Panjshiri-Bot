@@ -2,11 +2,48 @@ import fs from "fs";
 
 const path = "./data/ban.json";
 
-let banned = [];
 
-if(fs.existsSync(path)){
-banned = JSON.parse(fs.readFileSync(path));
+function load(){
+
+try{
+
+if(!fs.existsSync("./data")){
+fs.mkdirSync("./data");
 }
+
+
+if(!fs.existsSync(path)){
+fs.writeFileSync(path,"{}");
+}
+
+
+return JSON.parse(
+fs.readFileSync(path)
+);
+
+
+}catch(e){
+
+console.log("BAN LOAD ERROR:",e);
+
+return {};
+
+}
+
+}
+
+
+
+function save(data){
+
+fs.writeFileSync(
+path,
+JSON.stringify(data,null,2)
+);
+
+}
+
+
 
 export default async function ban(
 sock,
@@ -18,39 +55,110 @@ args
 
 try{
 
-const number = args[0];
+
+const bans = load();
+
+
+const number =
+args[0]?.replace(/\D/g,"");
+
+
 
 if(!number){
 
 return sock.sendMessage(from,{
-text:"📌 !ban 9379xxxx"
+text:
+`
+🚫 BAN SYSTEM
+
+استفاده:
+
+!ban 93794384087
+
+`
 });
 
 }
+
+
 
 const jid =
-number.replace(/\D/g,"") +
-"@s.whatsapp.net";
+number + "@s.whatsapp.net";
 
-if(!banned.includes(jid)){
 
-banned.push(jid);
 
-fs.writeFileSync(
-path,
-JSON.stringify(banned,null,2)
-);
+if(bans[jid]){
+
+return sock.sendMessage(from,{
+text:
+"⚠️ این کاربر قبلاً بن شده است"
+});
 
 }
 
+
+
+bans[jid]={
+
+jid,
+
+number,
+
+reason:
+"Manual Ban",
+
+time:
+new Date()
+.toLocaleString("fa-IR")
+
+};
+
+
+
+save(bans);
+
+
+
 await sock.sendMessage(from,{
-text:"🚫 user banned"
+text:
+`
+╭━━〔 🚫 USER BANNED 〕━━╮
+
+📱 NUMBER:
++${number}
+
+🆔 JID:
+${jid}
+
+⚠️ REASON:
+Manual Ban
+
+⏰ TIME:
+${bans[jid].time}
+
+🟢 STATUS:
+SAVED
+
+╰━━━━━━━━━━━━╯
+`
 });
+
+
 
 }catch(e){
 
-console.log(e);
+console.log(
+"BAN ERROR:",
+e
+);
+
+
+await sock.sendMessage(from,{
+text:
+"❌ Ban Error"
+});
 
 }
+
 
 }

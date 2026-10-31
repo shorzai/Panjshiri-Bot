@@ -1,30 +1,63 @@
-export default async function anticall(sock){
+// commands/anticall.js
 
-sock.ev.on("call", async(calls)=>{
+import { getDB, saveDB } from "../lib/db.js";
 
-try{
+export default async function anticall(sock, from, body){
 
-for(const call of calls){
+const db = getDB();
 
-const id = call.from;
+db.settings ??= {};
+db.settings.global ??= {};
 
-await sock.sendMessage(id,{
-text:"🚫 تماس ممنوع"
+const cmd = body.trim().toLowerCase();
+
+
+if(cmd === "!anticall on"){
+
+db.settings.global.anticall = true;
+saveDB(db);
+
+return sock.sendMessage(from,{
+text:"✅ AntiCall گروه فعال شد"
 });
-
-await sock.updateBlockStatus(
-id,
-"block"
-);
 
 }
 
-}catch(e){
 
-console.log(e);
+if(cmd === "!anticall off"){
+
+db.settings.global.anticall = false;
+saveDB(db);
+
+return sock.sendMessage(from,{
+text:"❌ AntiCall گروه خاموش شد"
+});
 
 }
 
+
+if(cmd === "!anticall"){
+
+return sock.sendMessage(from,{
+text:
+`
+📞 AntiCall Group
+
+وضعیت:
+${
+db.settings.global.anticall
+?
+"🟢 فعال"
+:
+"🔴 خاموش"
+}
+
+دستورات:
+!anticall on
+!anticall off
+`
 });
+
+}
 
 }

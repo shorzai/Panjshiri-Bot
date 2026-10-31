@@ -1,0 +1,101 @@
+import { getDB, saveDB } from "../lib/db.js";
+
+export default async function owner(sock, from, body, m, args) {
+  const db = getDB();
+  
+  // 🛠️ ساخت خودکار دیتابیس users اگه وجود نداشته باشه
+  if (!Array.isArray(db.users)) {
+    db.users = [];
+    saveDB(db);
+  }
+
+  const sender = m.key.participant || from;
+  const senderNum = sender.split("@")[0];
+
+  console.log("🔍 چک کردن مالکیت:", senderNum, "| لیست مالکین:", db.users);
+
+  // ═══════════════════════════════════════
+  // ۱. اگه لیست خالیه، اولین نفر (خودت) مالک میشی
+  // ═══════════════════════════════════════
+  if (db.users.length === 0) {
+    db.users.push(senderNum);
+    saveDB(db);
+    return sock.sendMessage(from, {
+      text: `✅ *شما به عنوان مالک ثبت شدید!*\n\n📞 شماره: ${senderNum}\n\nحالا دستوراتی مثل !hunt و !find برات کار می‌کنن.`
+    }, { quoted: m });
+  }
+
+  // ═══════════════════════════════════════
+  // ۲. اگه مالک نیستی، پیام خطا بده
+  // ═══════════════════════════════════════
+  if (!db.users.includes(senderNum)) {
+    return sock.sendMessage(from, {
+      text:
+`⛔ *شما مالک ربات نیستید*
+
+📞 شماره شما: ${senderNum}
+📋 مالکین فعلی: ${db.users.join(", ")}
+
+━━━━━━━━━━━━━━━
+💡 برای اینکه مالک بشی، باید ادمین ربات این دستور رو بزنه:
+!owner add ${senderNum}`
+    }, { quoted: m });
+  }
+
+  // ═══════════════════════════════════════
+  // ۳. دستورات مدیریت مالکین (فقط برای مالک)
+  // ═══════════════════════════════════════
+  const sub = (args[0] || "").toLowerCase();
+
+  // اضافه کردن مالک جدید
+  if (sub === "add") {
+    const newNum = (args[1] || "").replace(/[^0-9]/g, "");
+    if (newNum.length < 8) {
+      return sock.sendMessage(from, {
+        text: `استفاده: !owner add 989301234567\n\n📋 مالکین فعلی: ${db.users.join(", ")}`
+      }, { quoted: m });
+    }
+    if (db.users.includes(newNum)) {
+      return sock.sendMessage(from, { text: "⚠️ این شماره قبلاً مالکه." }, { quoted: m });
+    }
+    db.users.push(newNum);
+    saveDB(db);
+    return sock.sendMessage(from, {
+      text: `✅ اضافه شد: ${newNum}\n\n📋 لیست: ${db.users.join(", ")}`
+    }, { quoted: m });
+  }
+
+  // حذف مالک
+  if (sub === "remove" || sub === "del") {
+    const newNum = (args[1] || "").replace(/[^0-9]/g, "");
+    const idx = db.users.indexOf(newNum);
+    if (idx === -1) {
+      return sock.sendMessage(from, { text: "❌ پیدا نشد." }, { quoted: m });
+    }
+    if (db.users.length === 1) {
+      return sock.sendMessage(from, { text: "⚠️ تنها مالک قابل حذف نیست." }, { quoted: m });
+    }
+    db.users.splice(idx, 1);
+    saveDB(db);
+    return sock.sendMessage(from, { text: `✅ حذف شد: ${newNum}` }, { quoted: m });
+  }
+
+  // دیدن لیست مالکین
+  if (sub === "list") {
+    return sock.sendMessage(from, {
+      text: `👑 *مالکین ربات:*\n\n${db.users.map((n, i) => `${i + 1}. ${n}`).join("\n")}`
+    }, { quoted: m });
+  }
+
+  // راهنما
+  return sock.sendMessage(from, {
+    text:
+`👑 *مدیریت مالکین*
+
+📋 لیست: !owner list
+➕ اضافه: !owner add 93794384087
+➖ حذف: !owner remove 93794384087
+
+📊 مالکین فعلی: ${db.users.join(", ")}`
+  }, { quoted: m });
+}

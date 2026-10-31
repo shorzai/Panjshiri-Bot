@@ -1,0 +1,35 @@
+import yt from '@denzy-official/youtube_scraper';
+
+export default async function play(sock, from, body, m, args) {
+  if (!args.length) {
+    return sock.sendMessage(from, { text: "📌 استفاده:\n.play آهنگ مورد نظر\n.play https://youtu.be/xxxx" }, { quoted: m });
+  }
+
+  const query = args.join(" ");
+  const loading = await sock.sendMessage(from, { text: "🔍 در حال جستجو..." }, { quoted: m });
+
+  try {
+    // اگر لینک بود مستقیم دانلود کن، وگرنه جستجو کن
+    let result;
+    if (query.startsWith("http")) {
+      result = await yt.ytmp4(query);
+    } else {
+      const search = await yt.search(query);
+      if (!search.results?.length) throw new Error("چیزی پیدا نشد");
+      result = await yt.ytmp4(search.results[0].url);
+    }
+
+    if (!result?.download?.url) throw new Error("لینک دانلود پیدا نشد");
+
+    await sock.sendMessage(from, {
+      video: { url: result.download.url },
+      caption: `🎬 ${result.metadata.title}\n⏱️ ${result.metadata.timestamp || ''}\n\n📥 توسط SULTAN BOT`
+    }, { quoted: m });
+
+    // حذف پیام لودینگ
+    await sock.sendMessage(from, { delete: loading.key });
+  } catch (e) {
+    console.log("PLAY ERROR:", e);
+    await sock.sendMessage(from, { text: "❌ خطا: " + e.message, edit: loading.key });
+  }
+}

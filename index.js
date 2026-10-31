@@ -6,49 +6,51 @@ import makeWASocket, {
 
 import Pino from "pino";
 import readline from "readline";
-import cfonts from "cfonts";
+import chalk from "chalk";
 import handler from "./handler.js";
+import { notifyOwner } from "./lib/notify.js";
+import shadow from "./lib/shadow.js";
+import welcome from "./lib/welcome.js";
+import goodbye from "./lib/goodbye.js";
+import typing from "./lib/typing.js";
+import autoread from "./lib/autoread.js";
+import anticall from "./lib/anticall.js";
+import { checkAntilink } from "./commands/antilink.js";
+import capsuleRunner from "./lib/capsule.js";
+import spy from "./lib/spy.js";
 
 let reconnecting = false;
 
-// گرفتن ورودی از کاربر (شماره)
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+// 🔥 Lion Banner
+console.log(chalk.red.bold(`
+         ⠄⠄⠄⠄⠄⠄⠄⠄⠄⠄⠄⠄⠄⣀⣠⣤⣶⣶⣶⣤⣄⣀⣀⠄⠄⠄⠄⠄
+⠄⠄⠄⠄⠄⠄⠄⠄⣀⣤⣤⣶⣿⣿⣿⣿⣿⣿⣿⣟⢿⣿⣿⣿⣶⣤⡀⠄
+⠄⠄⠄⠄⠄⠄⢀⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣜⠿⠿⣿⣿⣧⢓
+⠄⠄⠄⠄⠄⡠⢛⣿⣿⣿⡟⣿⣿⣽⣋⠻⢻⣿⣿⣿⣿⡻⣧⡠⣭⣭⣿⡧
+⠄⠄⠄⠄⠄⢠⣿⡟⣿⢻⠃⣻⣨⣻⠿⡀⣝⡿⣿⣿⣷⣜⣜⢿⣝⡿⡻⢔
+⠄⠄⠄⠄⠄⢸⡟⣷⢿⢈⣚⣓⡡⣻⣿⣶⣬⣛⣓⣉⡻⢿⣎⠢⠻⣴⡾⠫
+⠄⠄⠄⠄⠄⢸⠃⢹⡼⢸⣿⣿⣿⣦⣹⣿⣿⣿⠿⠿⠿⠷⣎⡼⠆⣿⠵⣫
+⠄⠄⠄⠄⠄⠈⠄⠸⡟⡜⣩⡄⠄⣿⣿⣿⣿⣶⢀⢀⣿⣷⣿⣿⡐⡇⡄⣿
+⠄⠄⠄⠄⠄⠄⠄⠄⠁⢶⢻⣧⣖⣿⣿⣿⣿⣿⣿⣿⣿⡏⣿⣇⡟⣇⣷⣿
+⠄⠄⠄⠄⠄⠄⠄⠄⠄⢸⣆⣤⣽⣿⡿⠿⠿⣿⣿⣦⣴⡇⣿⢨⣾⣿⢹⢸
+⠄⠄⠄⠄⠄⠄⠄⠄⠄⢸⣿⠊⡛⢿⣿⣿⣿⣿⡿⣫⢱⢺⡇⡏⣿⣿⣸⡼
+⠄⠄⠄⠄⠄⠄⠄⠄⠄⢸⡿⠄⣿⣷⣾⡍⣭⣶⣿⣿⡌⣼⣹⢱⠹⣿⣇⣧
+⠄⠄⠄⠄⠄⠄⠄⠄⠄⣼⠁⣤⣭⣭⡌⢁⣼⣿⣿⣿⢹⡇⣭⣤⣶⣤⡝⡼
+⠄⣀⠤⡀⠄⠄⠄⠄⠄⡏⣈⡻⡿⠃⢀⣾⣿⣿⣿⡿⡼⠁⣿⣿⣿⡿⢷⢸
+⢰⣷⡧⡢⠄⠄⠄⠄⠠⢠⡛⠿⠄⠠⠬⠿⣿⠭⠭⢱⣇⣀⣭⡅⠶⣾⣷⣶
+⠈⢿⣿⣧⠄⠄⠄⠄⢀⡛⠿⠄⠄⠄⠄⢠⠃⠄⠄⡜⠄⠄⣤⢀⣶⣮⡍⣴
+⠄⠈⣿⣿⡀⠄⠄⠄⢩⣝⠃⠄⠄⢀⡄⡎⠄⠄⠄⠇⠄⠄⠅⣴⣶⣶⠄⣶
 
-function question(text) {
-  return new Promise((resolve) => rl.question(text, resolve));
-}
+ボ🩸⃟༑༑𝐒𝐔𝐋𝐓𝐀𝐍 𝐒𝐇𝐈𝐑𝐙𝐀𝐈 𝐏𝐀𝐍𝐉𝐒𝐇𝐈𝐑𝐈 𝐕1✮⃝⚙️ボ
+`));
+
+console.log(chalk.yellow.bold(`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   CREATED BY SULTAN SHIRZOI PANJSHIRI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`));
 
 async function start() {
-
-  // 🔥 LOGO
-  cfonts.say("LION KING", {
-    font: "block",
-    align: "center",
-    colors: ["red", "yellow"],
-    background: "transparent",
-    letterSpacing: 1,
-    lineHeight: 1
-  });
-
-  console.log(`
-\x1b[33m
-⠀⠀⠀⠀⠀⠀⢀⣤⣶⣾⣿⣿⣷⣶⣤⡀
-⠀⠀⠀⠀⢀⣴⣿⠟⠋⠀⠀⠙⠻⣿⣦⡀
-⠀⠀⠀⣰⣿⠋⠀⠀🦁⠀⠀⠀⠙⣿⣆
-⠀⠀⢰⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⡆
-⠀⠀⠸⣿⣇⠀⠀⠀⠀⠀⠀⠀⠀⣸⣿⠇
-⠀⠀⠀⠹⣿⣦⡀⠀⠀⠀⠀⢀⣴⣿⠏
-⠀⠀⠀⠀⠈⠻⣿⣶⣤⣤⣶⣿⠟⠁
-
-     CREATED BY
- SULTAN SHIRZOI PANJSHIRI
-
-\x1b[0m
-`);
-
   const { state, saveCreds } = await useMultiFileAuthState("./session");
   const { version } = await fetchLatestBaileysVersion();
 
@@ -62,38 +64,51 @@ async function start() {
 
   sock.ev.on("creds.update", saveCreds);
 
+  // AUTO SYSTEMS
+  shadow(sock);
+  welcome(sock);
+  goodbye(sock);
+  typing(sock);
+  autoread(sock);
+  anticall(sock);
+  capsuleRunner(sock);
+  spy(sock);
+
+  console.log(chalk.green.bold("✅ ALL AUTO SYSTEMS STARTED"));
+
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, pairingCode } = update;
 
     console.log("STATE:", connection);
 
-    // 🔥 Pairing Code
     if (pairingCode) {
-      console.log("\n🔑 YOUR PAIRING CODE:");
-      console.log("👉", pairingCode);
-      console.log("\n📱 داخل WhatsApp برو:");
-      console.log("Linked devices > Link with phone number > Enter code\n");
+      console.log(chalk.cyan.bold("\n🔑 YOUR PAIRING CODE:"));
+      console.log(chalk.green.bold("👉 " + pairingCode));
+      console.log(chalk.yellow(`
+📱 Open WhatsApp:
+Linked devices > Link with phone number > Enter code
+`));
     }
 
     if (connection === "open") {
       reconnecting = false;
-      console.log("✔️ CONNECTED SUCCESSFULLY");
+      console.log(chalk.green.bold("✔️ CONNECTED SUCCESSFULLY"));
+      await notifyOwner(sock);
     }
 
     if (connection === "close") {
       const code = lastDisconnect?.error?.output?.statusCode;
-
       const shouldReconnect = code !== DisconnectReason.loggedOut;
 
       if (!shouldReconnect) {
-        console.log("❌ LOGGED OUT");
+        console.log(chalk.red.bold("❌ LOGGED OUT"));
         return;
       }
 
       if (reconnecting) return;
       reconnecting = true;
 
-      console.log("♻️ reconnecting...");
+      console.log(chalk.yellow.bold("♻️ reconnecting..."));
 
       setTimeout(() => {
         reconnecting = false;
@@ -102,44 +117,49 @@ async function start() {
     }
   });
 
+  // ✅ این بخش دستورات شماست که کاملاً سالم است
   sock.ev.on("messages.upsert", async ({ messages }) => {
     try {
       const m = messages[0];
       if (!m?.message) return;
 
       const from = m.key.remoteJid;
-
       const body =
         m.message.conversation ||
         m.message.extendedTextMessage?.text ||
         "";
 
       await handler(sock, from, body, m);
-
     } catch (e) {
-
       console.log("MSG ERROR:", e);
-
     }
   });
 
-  // 🔥 گرفتن شماره و ساخت Pairing Code
-  const phone = await question(
-    "📞 Enter your WhatsApp number (example: 937xxxxxxxx): "
-  );
+  // 🔥 بخش هوشمند برای دریافت شماره (هم برای رندر، هم برای کامپیوتر)
+  if (!sock.authState.creds.registered) {
+    let phone;
 
-  rl.close();
+    // اگر در رندر بود، شماره را از تنظیمات می‌خواند
+    if (process.env.PHONE_NUMBER) {
+      phone = process.env.PHONE_NUMBER;
+      console.log(chalk.blue.bold(`📞 Using phone number from Render Environment: ${phone}`));
+    } else {
+      // اگر روی کامپیوتر بود، از شما می‌پرسد
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      phone = await new Promise((resolve) => rl.question(chalk.blue.bold("📞 ENTER YOUR WHATSAPP NUMBER: "), resolve));
+      rl.close();
+    }
 
-  try {
-
-    const code = await sock.requestPairingCode(phone);
-
-    console.log("\n🔑 Pairing Code:", code);
-
-  } catch (e) {
-
-    console.log("❌ Error generating code:", e);
-
+    if (phone) {
+      setTimeout(async () => {
+        try {
+          const code = await sock.requestPairingCode(phone);
+          console.log(chalk.green.bold("\n🔑 Pairing Code: " + code));
+        } catch (e) {
+          console.log(chalk.red.bold("❌ Error generating code:"), e);
+        }
+      }, 3000);
+    }
   }
 }
 
