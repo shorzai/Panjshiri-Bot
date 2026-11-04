@@ -1,0 +1,42 @@
+import { createSession } from "../../bot.js";
+
+export default async function handler(req, res) {
+    if (req.method !== "POST") {
+        return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    try {
+        const { phoneNumber } = req.body;
+
+        if (!phoneNumber || !/^\d{10,15}$/.test(phoneNumber)) {
+            return res.status(400).json({
+                success: false,
+                error: "شماره نامعتبر است. مثال: 93721234567"
+            });
+        }
+
+        // ساخت یا دریافت سوکت مخصوص این شماره
+        const sock = await createSession(phoneNumber);
+
+        if (sock.authState.creds.registered) {
+            return res.json({
+                success: false,
+                error: "این شماره قبلاً به ربات متصل شده است."
+            });
+        }
+
+        await new Promise(r => setTimeout(r, 1000));
+        
+        const code = await sock.requestPairingCode(phoneNumber);
+        console.log(`🔑 Pairing code for ${phoneNumber}: ${code}`);
+
+        res.json({ success: true, code });
+
+    } catch (error) {
+        console.error("Pairing error:", error);
+        res.status(500).json({
+            success: false,
+            error: "خطا در تولید کد: " + error.message
+        });
+    }
+}

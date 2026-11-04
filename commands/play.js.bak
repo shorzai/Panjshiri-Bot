@@ -1,35 +1,158 @@
-import yt from '@denzy-official/youtube_scraper';
+const API_KEY = "freekey";
 
-export default async function play(sock, from, body, m, args) {
-  if (!args.length) {
-    return sock.sendMessage(from, { text: "📌 استفاده:\n.play آهنگ مورد نظر\n.play https://youtu.be/xxxx" }, { quoted: m });
-  }
+const SEARCH_API = "https://pro-apis.zone.id/api/search/yts";
+const DOWNLOAD_API = "https://pro-apis.zone.id/api/download/yt";
 
-  const query = args.join(" ");
-  const loading = await sock.sendMessage(from, { text: "🔍 در حال جستجو..." }, { quoted: m });
+async function fetchJSON(url) {
+    const res = await fetch(url, {
+        headers: { "x-api-key": API_KEY },
+        signal: AbortSignal.timeout(60000)
+    });
 
-  try {
-    // اگر لینک بود مستقیم دانلود کن، وگرنه جستجو کن
-    let result;
-    if (query.startsWith("http")) {
-      result = await yt.ytmp4(query);
-    } else {
-      const search = await yt.search(query);
-      if (!search.results?.length) throw new Error("چیزی پیدا نشد");
-      result = await yt.ytmp4(search.results[0].url);
+    if (!res.ok) {
+        throw new Error(`API Error: ${res.status}`);
     }
 
-    if (!result?.download?.url) throw new Error("لینک دانلود پیدا نشد");
+    return await res.json();
+}
 
-    await sock.sendMessage(from, {
-      video: { url: result.download.url },
-      caption: `🎬 ${result.metadata.title}\n⏱️ ${result.metadata.timestamp || ''}\n\n📥 توسط SULTAN BOT`
-    }, { quoted: m });
+function isYouTubeLink(text) {
+    try {
+        const url = new URL(text);
+        return (
+            url.hostname.includes("youtube.com") ||
+            url.hostname.includes("youtu.be")
+        );
+    } catch {
+        return false;
+    }
+}
 
-    // حذف پیام لودینگ
-    await sock.sendMessage(from, { delete: loading.key });
-  } catch (e) {
-    console.log("PLAY ERROR:", e);
-    await sock.sendMessage(from, { text: "❌ خطا: " + e.message, edit: loading.key });
-  }
+export default async function play(sock, from, body, m, args) {
+    try {
+        const query = args.join(" ").trim();
+
+        if (!query) {
+            return await sock.sendMessage(from, {
+                text:
+                    "🎵 *RAEES SULTAN MUSIC DOWNLOADER*\n\n" +
+                    "روش استفاده:\n\n" +
+                    "1️⃣ !play نام آهنگ\n" +
+                    "2️⃣ !play نام خواننده\n" +
+                    "3️⃣ !play لینک یوتیوب\n\n" +
+                    "مثال:\n" +
+                    "!play اهنگ ایرانی غمگین"
+            }, { quoted: m });
+        }
+
+        await sock.sendMessage(from, {
+            text: "🔎 در حال جست‌وجوی آهنگ..."
+        }, { quoted: m });
+
+        let videoUrl = query;
+        let song = {};
+
+        // اگر لینک یوتیوب بود، مستقیماً دانلود کن
+        if (!isYouTubeLink(query)) {
+            const searchURL = new URL(SEARCH_API);
+
+            searchURL.searchParams.set("key", API_KEY);
+            searchURL.searchParams.set("q", query);
+            searchURL.searchParams.set("limit", "1");
+
+            const searchData = await fetchJSON(searchURL.toString());
+
+            if (!searchData.success) {
+                throw new Error("جست‌وجوی آهنگ موفق نشد.");
+            }
+
+            const results = searchData.data?.results || [];
+
+            if (!results.length) {
+                throw new Error("آهنگی پیدا نشد.");
+            }
+
+            song = results[0];
+            videoUrl = song.url;
+
+            if (!videoUrl) {
+                throw new Error("لینک آهنگ پیدا نشد.");
+            }
+        }
+
+        await sock.sendMessage(from, {
+            text:
+                "⬇️ *در حال دانلود آهنگ...*\n\n" +
+                (song.title ? `🎵 ${song.title}\n` : "") +
+                (song.author ? `👤 ${song.author}\n` : "") +
+                "لطفاً منتظر بمانید..."
+        }, { quoted: m });
+
+        const downloadURL = new URL(DOWNLOAD_API);
+
+        downloadURL.searchParams.set("key", API_KEY);
+        downloadURL.searchParams.set("url", videoUrl);
+        downloadURL.searchParams.set("type", "mp3");
+        downloadURL.searchParams.set("quality", "128");
+
+        const downloadData = await fetchJSON(downloadURL.toString());
+
+        if (!downloadData.success) {
+            throw new Error(
+                downloadData.error || "دانلود آهنگ ناموفق بود."
+            );
+        }
+
+        const data = downloadData.data;
+        const fileURL = data?.downloadUrl;
+
+        if (!fileURL) {
+            throw new Error("لینک فایل MP3 دریافت نشد.");
+        }
+
+        const audioResponse = await fetch(fileURL, {
+            signal: AbortSignal.timeout(120000)
+        });
+
+        if (!audioResponse.ok) {
+            throw new Error("دریافت فایل صوتی ناموفق بود.");
+        }
+
+        const maxSize = 25 * 1024 * 1024;
+        const audioBuffer = Buffer.from(
+            await audioResponse.arrayBuffer()
+        );
+
+        if (!audioBuffer.length) {
+            throw new Error("فایل آهنگ خالی است.");
+        }
+
+        if (audioBuffer.length > maxSize) {
+            throw new Error("حجم آهنگ بیشتر از 25MB است.");
+        }
+
+        const title = data.title || song.title || "Music";
+
+        const safeName = title
+            .replace(/[\\/:*?"<>|]/g, "")
+            .slice(0, 100);
+
+        await sock.sendMessage(from, {
+            audio: audioBuffer,
+            mimetype: "audio/mpeg",
+            fileName: `${safeName}.mp3`,
+            ptt: false
+        }, { quoted: m });
+
+        console.log("PLAY SUCCESS:", title);
+
+    } catch (error) {
+        console.log("PLAY ERROR:", error);
+
+        await sock.sendMessage(from, {
+            text:
+                "❌ دانلود آهنگ انجام نشد.\n\n" +
+                `خطا: ${error.message}`
+        }, { quoted: m });
+    }
 }
