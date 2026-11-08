@@ -36,7 +36,7 @@
     "face-api.js": "^0.22.2",
     "@totallynotdavid/downloader": "*",
     "rss-parser": "^3.13.0",
-    "spottydl": "^1.0.4",
+    "spottydl": "^0.2.7",
     "sharp": "^0.32.6",
     "fluent-ffmpeg": "^2.1.2"
   },
