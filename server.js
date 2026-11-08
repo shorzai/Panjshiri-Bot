@@ -12,23 +12,20 @@ const PORT = process.env.PORT || 3000;
 const server = express();
 server.use(express.json());
 
-// برای Health Check رندر
 server.get("/health", (req, res) => res.send("OK"));
 
-// 🚀 1. پورت را فوراً باز می‌کنیم تا رندر ارور No open ports نده
+// 🚀 1. باز کردن پورت به محض بالا آمدن سرور
 server.listen(PORT, () => {
     console.log(`🚀 Web server listening on port ${PORT}`);
 });
 
-// 2. Next.js و ربات را در پس‌زمینه لود می‌کنیم
+// 2. اجرای Next.js و ربات در پس‌زمینه
 nextApp.prepare().then(async () => {
     console.log("✅ Next.js prepared successfully");
     
-    // انتقال بقیه درخواست‌ها به Next.js
     server.all("*", (req, res) => handle(req, res));
 
     try {
-        // 👈 ربات را به صورت داینامیک لود می‌کنیم تا اگر کرش کرد، سایت را پایین نکشد
         const { createSession } = await import("./bot.js");
         console.log("✅ Bot module loaded");
         
