@@ -1,498 +1,1032 @@
 // =======================
-// MENU.JS — TERMINAL HACKER EDITION
-// شامل همه دستورات کرشر، ویروس، NUKE، CAM، WIFI
+// MENU.JS — SELECT MENU + IMAGE
 // =======================
 
 import fs from "fs";
 import os from "os";
+import {
+  proto,
+  generateWAMessageFromContent,
+  isJidGroup
+} from "@whiskeysockets/baileys";
 
 export default async function menu(sock, from, body, m, args) {
   try {
+
+    console.log("MENU COMMAND REACHED");
+
+    // =======================
+    // SYSTEM INFO
+    // =======================
+
     const startPing = Date.now();
+
     const uptime = process.uptime();
     const hours = Math.floor(uptime / 3600);
     const minutes = Math.floor((uptime % 3600) / 60);
     const seconds = Math.floor(uptime % 60);
-    const memory = Math.round(process.memoryUsage().rss / 1024 / 1024);
-    const totalMemory = Math.round(os.totalmem() / 1024 / 1024);
-    const ram = Math.round((memory / totalMemory) * 100);
+
+    const memory = Math.round(
+      process.memoryUsage().rss / 1024 / 1024
+    );
+
+    const totalMemory = Math.round(
+      os.totalmem() / 1024 / 1024
+    );
+
+    const ram = Math.round(
+      (memory / totalMemory) * 100
+    );
+
     const ping = Date.now() - startPing;
 
     let commands = 0;
+
     try {
-      commands = fs.readdirSync("./commands").filter(f => f.endsWith(".js")).length;
+      commands = fs
+        .readdirSync("./commands")
+        .filter(f => f.endsWith(".js"))
+        .length;
     } catch {}
 
-    const imagePath = "./sultan/menu.jpg";
+    const pushname = m.pushName || "User";
+    const isGroup = isJidGroup(from);
 
-    // ─── هدر ASCII ───
-    const header = `
-╔══════════════════════════════════════╗
-║     █████████████████████████████     ║
-║     █  👑 RAEES SULTAN BOT 👑  █     ║
-║     █   ⚡ ULTRA HACKER VAULT ⚡   █     ║
-║     █████████████████████████████     ║
-╚══════════════════════════════════════╝
+    // =======================
+    // HEADER
+    // =======================
 
-🟢 STATUS : ONLINE
-⚡ PING : ${ping}ms
-⏱ UPTIME : ${hours}h ${minutes}m ${seconds}s
-📦 COMMANDS : ${commands}
-💾 RAM : ${ram}% (${memory}/${totalMemory}MB)
+    const headerText = `
+╭━━━〔 👑 RAEES SULTAN BOT 〕━━━╮
+┃
+┃ 👤 User : ${pushname}
+┃ ⚡ Ping : ${ping} ms
+┃ ⏱️ Uptime : ${hours}h ${minutes}m ${seconds}s
+┃ 📦 Commands : ${commands}
+┃ 💾 RAM : ${memory} MB (${ram}%)
+┃
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+
+🔥 خوش آمدید به پنل اصلی ربات
+📂 برای دیدن تمام دستورات روی دکمه زیر بزنید.
 `;
 
-    // ─── منوی سلکت (اینتراکتیو) ───
+    // ==========================================================
+    // IMPORTANT:
+    // اینجا همان SECTIONS کامل قبلی خودت را قرار بده.
+    // هیچ دستور جدیدی اضافه نکن و هیچ دستوری را حذف نکن.
+    // ==========================================================
+
     const sections = [
+
       {
         title: "🧠 AI CENTER",
         rows: [
-          { title: "!ai <prompt>", description: "AI هوشمند (GPT)" },
-          { title: "!ai-lite <prompt>", description: "AI سبک و سریع" },
-          { title: "!gpt <prompt>", description: "ChatGPT مستقیم" },
-          { title: "!aio <prompt>", description: "AI همه‌کاره" },
-          { title: "!detect", description: "تشخیص محتوا" },
-          { title: "!translate <lang> <text>", description: "ترجمه متن" },
-          { title: "!search <query>", description: "جستجوی هوشمند" },
-        ],
-      },
-      {
-        title: "⚔️ WAR & POWER",
-        rows: [
-          { title: "!war", description: "اعلان جنگ گروهی" },
-          { title: "!marshal", description: "حکم نظامی" },
-          { title: "!power", description: "نمایش قدرت بات" },
-          { title: "!kingpower", description: "فعالسازی قدرت پادشاه" },
-          { title: "!box", description: "جعبه جنگی" },
-          { title: "!add <number>", description: "اضافه کردن عضو" },
-          { title: "!addall", description: "اضافه کردن همه اعضا" },
-          { title: "!kick @user", description: "اخراج عضو" },
-          { title: "!promote @user", description: "ارتقا به ادمین" },
-          { title: "!demote @user", description: "تنزل ادمین" },
-          { title: "!ban @user", description: "بن عضو" },
-          { title: "!unban @user", description: "رفع بن" },
-        ],
-      },
-      {
-        title: "👥 GROUP CONTROL",
-        rows: [
-          { title: "!tagall", description: "منشن همه اعضا" },
-          { title: "!welcome on/off", description: "خوشامدگویی" },
-          { title: "!goodbye on/off", description: "خداحافظی" },
-          { title: "!listadmin", description: "لیست ادمین‌ها" },
-          { title: "!listonline", description: "اعضای آنلاین" },
-        ],
-      },
-      {
-        title: "🛡 SECURITY SYSTEM",
-        rows: [
-          { title: "!antilink on/off", description: "جلوگیری از لینک" },
-          { title: "!antibad on/off", description: "فیلتر کلمات بد" },
-          { title: "!antispam on/off", description: "ضد اسپم" },
-          { title: "!antiforeign on/off", description: "جلوگیری از خارجی" },
-          { title: "!antiemoji on/off", description: "فیلتر ایموجی" },
-          { title: "!antiimage on/off", description: "فیلتر عکس" },
-          { title: "!antivideo on/off", description: "فیلتر ویدیو" },
-          { title: "!antiaudio on/off", description: "فیلتر صدا" },
-          { title: "!anticall on/off", description: "قطع تماس" },
-          { title: "!antidelete", description: "ذخیره پیام‌های حذف شده" },
-        ],
-      },
-      {
-        title: "💣 CRASH — DESTROYER KIT",
-        rows: [
-          { title: "!crash flood <n> [num]", description: "بمب متنی (۳تایی همزمان)" },
-          { title: "!crash media <n> [num]", description: "بمب تصویری PNG" },
-          { title: "!crash png [num]", description: "تک PNG بمب ۱۲۰۰۰²" },
-          { title: "!crash gif [num]", description: "GIF بمب ۶۵۵۳۵²" },
-          { title: "!crash vcard [num]", description: "vCard بمب (۸۰ مخاطب)" },
-          { title: "!crash contacts [num]", description: "مخاطبین بومی بمب" },
-          { title: "!crash quote <n> [num]", description: "نقل‌قول غول‌پیکر" },
-          { title: "!crash react <n> [num]", description: "فلاد ریکشن" },
-          { title: "!crash voice <n> [num]", description: "فلاد وویس ۱۰ثانیه" },
-          { title: "!crash poll <n> [num]", description: "فلاد نظرسنجی" },
-          { title: "!crash loc <n> [num]", description: "فلاد موقعیت مکانی" },
-          { title: "!crash doc [num]", description: "سند ۲MB" },
-          { title: "!crash link [num]", description: "لینک‌پریویو بمب" },
-          { title: "!crash mega [extreme] [num]", description: "همه بمب‌های مدیا یکجا" },
-          { title: "!crash total [extreme] <n> [num]", description: "نابودگر کامل (۷حالت+مگا)" },
-          { title: "!crash stop", description: "توقف فوری کرشر" },
-          { title: "!crash list", description: "لیست کامل کرشر" },
-        ],
-      },
-      {
-        title: "🧬 VIRUS — GROUP ATTACK",
-        rows: [
-          { title: "!virus <link>", description: "حمله خودکار با لینک گروه" },
-          { title: "!virus <link> nuke", description: "اجبار مسیر NUKE" },
-          { title: "!virus <link> flood <n>", description: "فلاد متنی داخل گروه" },
-          { title: "!virus <link> media <n>", description: "بمب تصویری داخل گروه" },
-          { title: "!virus <link> exodus <n>", description: "کمپین فراری دادن اعضا" },
-          { title: "!virus <link> raid <n>", description: "پخش لینک در گروه‌های دیگر" },
-          { title: "!virus <link> status", description: "فقط گزارش گروه" },
-          { title: "!virus stop", description: "توقف ویروس" },
-        ],
-      },
-      {
-        title: "☠️ NUKE — GROUP DESTROYER",
-        rows: [
-          { title: "!nuke", description: "انهدام کامل گروه (ادمین)" },
-          { title: "!nuke icon", description: "بمب آیکون گروه" },
-          { title: "!nuke spam <n>", description: "اسپم سنگین" },
-          { title: "!nuke revoke <n>", description: "باطل کردن لینک دعوت" },
-          { title: "!nuke remove <n>", description: "حذف اعضا" },
-          { title: "!nuke link <link>", description: "پیوستن و نابودی" },
-        ],
-      },
-      {
-        title: "📷 CAM — PHISHING",
-        rows: [
-          { title: "!cam", description: "ساخت لینک فیشینگ دوربین" },
-          { title: "!cam stop", description: "توقف سرور دوربین" },
-          { title: "!cam stats", description: "آمار عکس‌های دریافتی" },
-        ],
-      },
-      {
-        title: "📡 WIFI — CRACK KIT",
-        rows: [
-          { title: "!wifi help", description: "راهنمای کامل وای‌فای" },
-          { title: "!wifi scan", description: "اسکن شبکه‌های اطراف" },
-          { title: "!wifi handshake <bssid>", description: "گرفتن هندشیک" },
-          { title: "!wifi crack <bssid> <wordlist>", description: "کرک هندشیک" },
-          { title: "!wifi psk <ssid> <pass>", description: "تولید PSK" },
-          { title: "!wifi wps <bssid>", description: "حمله WPS (Pixie Dust)" },
-        ],
-      },
-      {
-        title: "🎵 MUSIC CENTER",
-        rows: [
-          { title: "!music <name>", description: "پخش موزیک از یوتیوب" },
-          { title: "!song <name>", description: "دانلود آهنگ" },
-          { title: "!lyrics <song>", description: "متن آهنگ" },
-        ],
-      },
-      {
-        title: "😂 FUN ZONE",
-        rows: [
-          { title: "!joke", description: "جوک تصادفی" },
-          { title: "!fact", description: "حقیقت جالب" },
-          { title: "!love", description: "تست عشق" },
-          { title: "!roast @user", description: "طعنه به کاربر" },
-          { title: "!dice", description: "تاس انداختن" },
-          { title: "!quote", description: "جمله معروف" },
-          { title: "!fakereply", description: "ریپلای جعلی" },
-          { title: "!mafia", description: "بازی مافیا" },
-        ],
-      },
-      {
-        title: "💰 ECONOMY",
-        rows: [
-          { title: "!balance", description: "کیف پول" },
-          { title: "!daily", description: "بونوس روزانه" },
-          { title: "!gamble <amount>", description: "قمار" },
-          { title: "!rank", description: "رتبه‌بندی" },
-          { title: "!level", description: "سطح کاربر" },
-        ],
-      },
-      {
-        title: "⚙️ TOOLS",
-        rows: [
-          { title: "!ping", description: "پینگ بات" },
-          { title: "!alive", description: "بررسی زنده بودن" },
-          { title: "!runtime", description: "زمان اجرا" },
-          { title: "!uptime", description: "آپتایم بات" },
-          { title: "!time", description: "زمان فعلی" },
-          { title: "!whois <number>", description: "اطلاعات شماره" },
-          { title: "!device <number>", description: "اطلاعات دستگاه" },
-          { title: "!check", description: "بررسی سلامت" },
-        ],
-      },
-      {
-        title: "👑 OWNER PANEL",
-        rows: [
-          { title: "!broadcast <text>", description: "پیام همگانی" },
-          { title: "!forward <jid>", description: "فوروارد پیام" },
-          { title: "!invite <link>", description: "دعوت ربات" },
-          { title: "!join <link>", description: "پیوستن به گروه" },
-          { title: "!block <number>", description: "بلاک" },
-          { title: "!unblock <number>", description: "آنبلاک" },
-        ],
-      },
-    ];
-
-    // ─── SELECT TAB MENU ───
-try {
-
-  const buttonParams = {
-    title: "👑 RAEES SULTAN HACKER VAULT",
-
-    sections: sections.map(section => ({
-      title: section.title,
-
-      rows: section.rows.map((row, index) => ({
-        header: "",
-        title: row.title,
-        description: row.description || "",
-        id: `menu_${index}_${Buffer.from(row.title).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 30)}`
-      }))
-    }))
-  };
-
-  const nativeButton =
-    proto.Message.InteractiveMessage.NativeFlowMessage.NativeFlowButton.create({
-      name: "single_select",
-      buttonParamsJson: JSON.stringify(buttonParams)
-    });
-
-  const interactiveMessage =
-    proto.Message.InteractiveMessage.create({
-
-      body: proto.Message.InteractiveMessage.Body.create({
-        text: header
-      }),
-
-      footer: proto.Message.InteractiveMessage.Footer.create({
-        text: "🔥 POWERED BY 👑 RAEES SULTAN BOT | ULTRA VPS"
-      }),
-
-      nativeFlowMessage:
-        proto.Message.InteractiveMessage.NativeFlowMessage.create({
-          buttons: [nativeButton],
-          messageParamsJson: "{}",
-          messageVersion: 1
-        })
-    });
-
-  const waMessage = generateWAMessageFromContent(
-    from,
-    {
-      interactiveMessage
-    },
-    {
-      userJid: sock.user?.id
-    }
-  );
-
-  const bizNode = {
-    tag: "biz",
-    attrs: {},
-    content: [
-      {
-        tag: "interactive",
-        attrs: {
-          type: "native_flow",
-          v: "1"
-        },
-        content: [
           {
-            tag: "native_flow",
-            attrs: {
-              v: "9",
-              name: "mixed"
-            }
+            header: "🤖",
+            title: "AI هوشمند",
+            description: "!ai <prompt>",
+            id: ".ai"
+          },
+          {
+            header: "⚡",
+            title: "AI سبک",
+            description: "!ai-lite <prompt>",
+            id: ".ai-lite"
+          },
+          {
+            header: "💬",
+            title: "ChatGPT",
+            description: "!gpt <prompt>",
+            id: ".gpt"
+          },
+          {
+            header: "🔍",
+            title: "تشخیص",
+            description: "!detect",
+            id: ".detect"
+          },
+          {
+            header: "🌍",
+            title: "ترجمه",
+            description: "!translate <lang> <text>",
+            id: ".translate"
+          },
+          {
+            header: "🔎",
+            title: "جستجو",
+            description: "!search <query>",
+            id: ".search"
           }
         ]
       },
-      {
-        tag: "quality_control",
-        attrs: {
-          source_type: "third_party"
-        }
-      }
-    ]
-  };
 
-  const additionalNodes = isJidGroup(from)
-    ? [bizNode]
-    : [
+      {
+        title: "⚔️ WAR & POWER",
+        rows: [
+          {
+            header: "⚔️",
+            title: "اعلان جنگ",
+            description: "!war",
+            id: ".war"
+          },
+          {
+            header: "👑",
+            title: "Marshal",
+            description: "!marshal",
+            id: ".marshal"
+          },
+          {
+            header: "💥",
+            title: "Power",
+            description: "!power",
+            id: ".power"
+          },
+          {
+            header: "👑",
+            title: "King Power",
+            description: "!kingpower",
+            id: ".kingpower"
+          },
+          {
+            header: "📦",
+            title: "Box",
+            description: "!box",
+            id: ".box"
+          },
+          {
+            header: "➕",
+            title: "اضافه کردن",
+            description: "!add <number>",
+            id: ".add"
+          },
+          {
+            header: "👥",
+            title: "اضافه کردن همه",
+            description: "!addall",
+            id: ".addall"
+          },
+          {
+            header: "👢",
+            title: "اخراج",
+            description: "!kick @user",
+            id: ".kick"
+          },
+          {
+            header: "⭐",
+            title: "ارتقا ادمین",
+            description: "!promote @user",
+            id: ".promote"
+          },
+          {
+            header: "⬇️",
+            title: "تنزل ادمین",
+            description: "!demote @user",
+            id: ".demote"
+          },
+          {
+            header: "🔨",
+            title: "بن",
+            description: "!ban @user",
+            id: ".ban"
+          },
+          {
+            header: "♻️",
+            title: "رفع بن",
+            description: "!unban @user",
+            id: ".unban"
+          }
+        ]
+      },
+
+      {
+        title: "👥 GROUP CONTROL",
+        rows: [
+          {
+            header: "📢",
+            title: "منشن همه",
+            description: "!tagall",
+            id: ".tagall"
+          },
+          {
+            header: "👋",
+            title: "خوشامدگویی",
+            description: "!welcome on/off",
+            id: ".welcome"
+          },
+          {
+            header: "🚪",
+            title: "خداحافظی",
+            description: "!goodbye on/off",
+            id: ".goodbye"
+          },
+          {
+            header: "👑",
+            title: "لیست ادمین",
+            description: "!listadmin",
+            id: ".listadmin"
+          },
+          {
+            header: "🟢",
+            title: "اعضای آنلاین",
+            description: "!listonline",
+            id: ".listonline"
+          }
+        ]
+      },
+
+      {
+        title: "🛡️ SECURITY SYSTEM",
+        rows: [
+          {
+            header: "🔗",
+            title: "ضد لینک",
+            description: "!antilink on/off",
+            id: ".antilink"
+          },
+          {
+            header: "🚫",
+            title: "ضد کلمات بد",
+            description: "!antibad on/off",
+            id: ".antibad"
+          },
+          {
+            header: "📵",
+            title: "ضد اسپم",
+            description: "!antispam on/off",
+            id: ".antispam"
+          },
+          {
+            header: "🌐",
+            title: "ضد خارجی",
+            description: "!antiforeign on/off",
+            id: ".antiforeign"
+          },
+          {
+            header: "😀",
+            title: "ضد ایموجی",
+            description: "!antiemoji on/off",
+            id: ".antiemoji"
+          },
+          {
+            header: "🖼️",
+            title: "ضد عکس",
+            description: "!antiimage on/off",
+            id: ".antiimage"
+          },
+          {
+            header: "🎥",
+            title: "ضد ویدیو",
+            description: "!antivideo on/off",
+            id: ".antivideo"
+          },
+          {
+            header: "🎵",
+            title: "ضد صدا",
+            description: "!antiaudio on/off",
+            id: ".antiaudio"
+          },
+          {
+            header: "📞",
+            title: "ضد تماس",
+            description: "!anticall on/off",
+            id: ".anticall"
+          },
+          {
+            header: "🗑️",
+            title: "ضد حذف",
+            description: "!antidelete",
+            id: ".antidelete"
+          }
+        ]
+      },
+
+      {
+        title: "💣 CRASH — DESTROYER KIT",
+        rows: [
+          {
+            header: "💥",
+            title: "Crash Flood",
+            description: "!crash flood <n> [num]",
+            id: ".crash flood"
+          },
+          {
+            header: "🖼️",
+            title: "Crash Media",
+            description: "!crash media <n> [num]",
+            id: ".crash media"
+          },
+          {
+            header: "📄",
+            title: "Crash PNG",
+            description: "!crash png [num]",
+            id: ".crash png"
+          },
+          {
+            header: "🎞️",
+            title: "Crash GIF",
+            description: "!crash gif [num]",
+            id: ".crash gif"
+          },
+          {
+            header: "📇",
+            title: "Crash vCard",
+            description: "!crash vcard [num]",
+            id: ".crash vcard"
+          },
+          {
+            header: "👥",
+            title: "Crash Contacts",
+            description: "!crash contacts [num]",
+            id: ".crash contacts"
+          },
+          {
+            header: "💬",
+            title: "Crash Quote",
+            description: "!crash quote <n> [num]",
+            id: ".crash quote"
+          },
+          {
+            header: "❤️",
+            title: "Crash React",
+            description: "!crash react <n> [num]",
+            id: ".crash react"
+          },
+          {
+            header: "🎤",
+            title: "Crash Voice",
+            description: "!crash voice <n> [num]",
+            id: ".crash voice"
+          },
+          {
+            header: "📊",
+            title: "Crash Poll",
+            description: "!crash poll <n> [num]",
+            id: ".crash poll"
+          },
+          {
+            header: "📍",
+            title: "Crash Location",
+            description: "!crash loc <n> [num]",
+            id: ".crash loc"
+          },
+          {
+            header: "📄",
+            title: "Crash Document",
+            description: "!crash doc [num]",
+            id: ".crash doc"
+          },
+          {
+            header: "🔗",
+            title: "Crash Link",
+            description: "!crash link [num]",
+            id: ".crash link"
+          },
+          {
+            header: "💀",
+            title: "Crash Mega",
+            description: "!crash mega [extreme] [num]",
+            id: ".crash mega"
+          },
+          {
+            header: "☠️",
+            title: "Crash Total",
+            description: "!crash total [extreme] <n> [num]",
+            id: ".crash total"
+          },
+          {
+            header: "⏹️",
+            title: "توقف Crash",
+            description: "!crash stop",
+            id: ".crash stop"
+          },
+          {
+            header: "📋",
+            title: "لیست Crash",
+            description: "!crash list",
+            id: ".crash list"
+          }
+        ]
+      },
+
+      {
+        title: "🧬 VIRUS — GROUP ATTACK",
+        rows: [
+          {
+            header: "🦠",
+            title: "Virus",
+            description: "!virus <link>",
+            id: ".virus"
+          },
+          {
+            header: "☢️",
+            title: "Virus Nuke",
+            description: "!virus <link> nuke",
+            id: ".virus nuke"
+          },
+          {
+            header: "📢",
+            title: "Virus Flood",
+            description: "!virus <link> flood <n>",
+            id: ".virus flood"
+          },
+          {
+            header: "🖼️",
+            title: "Virus Media",
+            description: "!virus <link> media <n>",
+            id: ".virus media"
+          },
+          {
+            header: "🚪",
+            title: "Virus Exodus",
+            description: "!virus <link> exodus <n>",
+            id: ".virus exodus"
+          },
+          {
+            header: "⚔️",
+            title: "Virus Raid",
+            description: "!virus <link> raid <n>",
+            id: ".virus raid"
+          },
+          {
+            header: "📊",
+            title: "Virus Status",
+            description: "!virus <link> status",
+            id: ".virus status"
+          },
+          {
+            header: "⏹️",
+            title: "توقف Virus",
+            description: "!virus stop",
+            id: ".virus stop"
+          }
+        ]
+      },
+
+      {
+        title: "☠️ NUKE — GROUP DESTROYER",
+        rows: [
+          {
+            header: "💣",
+            title: "Nuke",
+            description: "!nuke",
+            id: ".nuke"
+          },
+          {
+            header: "🖼️",
+            title: "Nuke Icon",
+            description: "!nuke icon",
+            id: ".nuke icon"
+          },
+          {
+            header: "📢",
+            title: "Nuke Spam",
+            description: "!nuke spam <n>",
+            id: ".nuke spam"
+          },
+          {
+            header: "🔄",
+            title: "Nuke Revoke",
+            description: "!nuke revoke <n>",
+            id: ".nuke revoke"
+          },
+          {
+            header: "🗑️",
+            title: "Nuke Remove",
+            description: "!nuke remove <n>",
+            id: ".nuke remove"
+          },
+          {
+            header: "🔗",
+            title: "Nuke Link",
+            description: "!nuke link <link>",
+            id: ".nuke link"
+          }
+        ]
+      },
+
+      {
+        title: "📷 CAM — PHISHING",
+        rows: [
+          {
+            header: "📷",
+            title: "CAM",
+            description: "!cam",
+            id: ".cam"
+          },
+          {
+            header: "⏹️",
+            title: "CAM Stop",
+            description: "!cam stop",
+            id: ".cam stop"
+          },
+          {
+            header: "📊",
+            title: "CAM Stats",
+            description: "!cam stats",
+            id: ".cam stats"
+          }
+        ]
+      },
+
+      {
+        title: "📡 WIFI — CRACK KIT",
+        rows: [
+          {
+            header: "❓",
+            title: "WiFi Help",
+            description: "!wifi help",
+            id: ".wifi help"
+          },
+          {
+            header: "📡",
+            title: "WiFi Scan",
+            description: "!wifi scan",
+            id: ".wifi scan"
+          },
+          {
+            header: "🤝",
+            title: "Handshake",
+            description: "!wifi handshake <bssid>",
+            id: ".wifi handshake"
+          },
+          {
+            header: "🔓",
+            title: "Crack",
+            description: "!wifi crack <bssid> <wordlist>",
+            id: ".wifi crack"
+          },
+          {
+            header: "🔑",
+            title: "PSK",
+            description: "!wifi psk <ssid> <pass>",
+            id: ".wifi psk"
+          },
+          {
+            header: "📶",
+            title: "WPS",
+            description: "!wifi wps <bssid>",
+            id: ".wifi wps"
+          }
+        ]
+      },
+
+      {
+        title: "🎵 MUSIC CENTER",
+        rows: [
+          {
+            header: "🎵",
+            title: "Music",
+            description: "!music <name>",
+            id: ".music"
+          },
+          {
+            header: "🎧",
+            title: "Song",
+            description: "!song <name>",
+            id: ".song"
+          },
+          {
+            header: "📝",
+            title: "Lyrics",
+            description: "!lyrics <song>",
+            id: ".lyrics"
+          }
+        ]
+      },
+
+      {
+        title: "😂 FUN ZONE",
+        rows: [
+          {
+            header: "😂",
+            title: "جوک",
+            description: "!joke",
+            id: ".joke"
+          },
+          {
+            header: "💡",
+            title: "Fact",
+            description: "!fact",
+            id: ".fact"
+          },
+          {
+            header: "❤️",
+            title: "Love",
+            description: "!love",
+            id: ".love"
+          },
+          {
+            header: "🔥",
+            title: "Roast",
+            description: "!roast @user",
+            id: ".roast"
+          },
+          {
+            header: "🎲",
+            title: "Dice",
+            description: "!dice",
+            id: ".dice"
+          },
+          {
+            header: "💬",
+            title: "Quote",
+            description: "!quote",
+            id: ".quote"
+          },
+          {
+            header: "🎭",
+            title: "Fake Reply",
+            description: "!fakereply",
+            id: ".fakereply"
+          },
+          {
+            header: "🔫",
+            title: "Mafia",
+            description: "!mafia",
+            id: ".mafia"
+          }
+        ]
+      },
+
+      {
+        title: "💰 ECONOMY",
+        rows: [
+          {
+            header: "💰",
+            title: "Balance",
+            description: "!balance",
+            id: ".balance"
+          },
+          {
+            header: "🎁",
+            title: "Daily",
+            description: "!daily",
+            id: ".daily"
+          },
+          {
+            header: "🎰",
+            title: "Gamble",
+            description: "!gamble <amount>",
+            id: ".gamble"
+          },
+          {
+            header: "🏆",
+            title: "Rank",
+            description: "!rank",
+            id: ".rank"
+          },
+          {
+            header: "⭐",
+            title: "Level",
+            description: "!level",
+            id: ".level"
+          }
+        ]
+      },
+
+      {
+        title: "⚙️ TOOLS",
+        rows: [
+          {
+            header: "📡",
+            title: "Ping",
+            description: "!ping",
+            id: ".ping"
+          },
+          {
+            header: "💚",
+            title: "Alive",
+            description: "!alive",
+            id: ".alive"
+          },
+          {
+            header: "⏱️",
+            title: "Runtime",
+            description: "!runtime",
+            id: ".runtime"
+          },
+          {
+            header: "⏰",
+            title: "Uptime",
+            description: "!uptime",
+            id: ".uptime"
+          },
+          {
+            header: "🕐",
+            title: "Time",
+            description: "!time",
+            id: ".time"
+          },
+          {
+            header: "🔍",
+            title: "Whois",
+            description: "!whois <number>",
+            id: ".whois"
+          },
+          {
+            header: "📱",
+            title: "Device",
+            description: "!device <number>",
+            id: ".device"
+          },
+          {
+            header: "✅",
+            title: "Check",
+            description: "!check",
+            id: ".check"
+          }
+        ]
+      },
+
+      {
+        title: "👑 OWNER PANEL",
+        rows: [
+          {
+            header: "📢",
+            title: "Broadcast",
+            description: "!broadcast <text>",
+            id: ".broadcast"
+          },
+          {
+            header: "↪️",
+            title: "Forward",
+            description: "!forward <jid>",
+            id: ".forward"
+          },
+          {
+            header: "🔗",
+            title: "Invite",
+            description: "!invite <link>",
+            id: ".invite"
+          },
+          {
+            header: "🚪",
+            title: "Join",
+            description: "!join <link>",
+            id: ".join"
+          },
+          {
+            header: "🚫",
+            title: "Block",
+            description: "!block <number>",
+            id: ".block"
+          },
+          {
+            header: "♻️",
+            title: "Unblock",
+            description: "!unblock <number>",
+            id: ".unblock"
+          }
+        ]
+      }
+
+    ];
+
+    // ==========================================================
+    // 1 — ارسال تصویر
+    // ==========================================================
+
+    const imagePath = "./sultan/menu.jpg";
+
+    if (fs.existsSync(imagePath)) {
+
+      try {
+
+        await sock.sendMessage(from, {
+          image: fs.readFileSync(imagePath),
+          caption: "👑 RAEES SULTAN BOT\n📂 منوی اصلی"
+        });
+
+        console.log("✅ MENU IMAGE SENT");
+
+      } catch (imageError) {
+
+        console.log(
+          "❌ MENU IMAGE ERROR:",
+          imageError.message
+        );
+
+      }
+
+    } else {
+
+      console.log(
+        "⚠️ Image not found:",
+        imagePath
+      );
+
+    }
+
+    // ==========================================================
+    // 2 — تبدیل Sections به Native Flow
+    // ==========================================================
+
+    const buttonParamsJson = JSON.stringify({
+
+      title: "👑 RAEES SULTAN HACKER VAULT",
+
+      sections: sections.map(section => ({
+
+        title: section.title,
+
+        ...(section.highlight_label
+          ? {
+              highlight_label:
+                section.highlight_label
+            }
+          : {}),
+
+        rows: section.rows.map(row => ({
+
+          header: row.header || "",
+          title: row.title,
+          description: row.description || "",
+          id: row.id
+
+        }))
+
+      }))
+
+    });
+
+    // ==========================================================
+    // 3 — ساخت Native Flow
+    // ==========================================================
+
+    const interactiveMsg =
+      generateWAMessageFromContent(
+        from,
         {
-          tag: "bot",
-          attrs: {
-            biz_bot: "1"
+          viewOnceMessage: {
+            message: {
+
+              interactiveMessage:
+                proto.Message.InteractiveMessage.create({
+
+                  body:
+                    proto.Message.InteractiveMessage.Body.create({
+                      text: headerText
+                    }),
+
+                  footer:
+                    proto.Message.InteractiveMessage.Footer.create({
+                      text:
+                        "🔥 POWERED BY 👑 RAEES SULTAN BOT"
+                    }),
+
+                  header:
+                    proto.Message.InteractiveMessage.Header.create({
+                      title:
+                        "👑 RAEES SULTAN HACKER VAULT",
+                      hasMediaAttachment: false
+                    }),
+
+                  nativeFlowMessage:
+                    proto.Message.InteractiveMessage
+                      .NativeFlowMessage.create({
+
+                        buttons: [
+
+                          {
+                            name: "single_select",
+
+                            buttonParamsJson:
+                              buttonParamsJson
+                          }
+
+                        ],
+
+                        messageParamsJson: "{}",
+
+                        messageVersion: 1
+
+                      })
+
+                })
+
+            }
           }
         },
-        bizNode
-      ];
+        {
+          userJid: sock.user?.id
+        }
+      );
 
-  await sock.relayMessage(
-    from,
-    waMessage.message,
-    {
-      messageId: waMessage.key.id,
-      additionalNodes
-    }
-  );
+    // ==========================================================
+    // 4 — ارسال واقعی Select Menu
+    // ==========================================================
 
-  return;
+    const additionalNodes = isGroup
 
-} catch (err) {
+      ? [
+          {
+            tag: "biz",
+            attrs: {},
+            content: [
 
-  console.log("SELECT TAB ERROR:", err);
+              {
+                tag: "interactive",
+                attrs: {
+                  type: "native_flow",
+                  v: "1"
+                },
+                content: [
 
-}
+                  {
+                    tag: "native_flow",
+                    attrs: {
+                      v: "9",
+                      name: "mixed"
+                    }
+                  }
 
-    // ─── منوی متنی کامل (فال‌بک) ───
-    const textMenu = header + `
+                ]
+              },
 
-╔══════════════════════════════════╗
-║        🤖 AI CENTER             ║
-╠══════════════════════════════════╣
-║ !ai | !ai lite | !gpt           ║
-║ !aio | !detect | !translate     ║
-║ !search                         ║
-╚══════════════════════════════════╝
+              {
+                tag: "quality_control",
+                attrs: {
+                  source_type: "third_party"
+                }
+              }
 
-╔══════════════════════════════════╗
-║        ⚔️ WAR & POWER           ║
-╠══════════════════════════════════╣
-║ !war !marshal !power !kingpower  ║
-║ !box !add !addall !kick          ║
-║ !promote !demote !ban !unban     ║
-╚══════════════════════════════════╝
+            ]
+          }
+        ]
 
-╔══════════════════════════════════╗
-║       👥 GROUP CONTROL          ║
-╠══════════════════════════════════╣
-║ !tagall !welcome !goodbye        ║
-║ !listadmin !listonline           ║
-╚══════════════════════════════════╝
+      : [
 
-╔══════════════════════════════════╗
-║        🛡 SECURITY SYSTEM        ║
-╠══════════════════════════════════╣
-║ !antilink !antibad !antispam    ║
-║ !antiforeign !antiemoji          ║
-║ !antiimage !antivideo            ║
-║ !antiaudio !anticall !antidelete ║
-╚══════════════════════════════════╝
+          {
+            tag: "bot",
+            attrs: {
+              biz_bot: "1"
+            }
+          },
 
-╔══════════════════════════════════╗
-║    💣 CRASH DESTROYER KIT       ║
-╠══════════════════════════════════╣
-║ !crash flood <n>       ─ متنی    ║
-║ !crash media <n>       ─ تصویری   ║
-║ !crash png             ─ PNG بمب  ║
-║ !crash gif             ─ GIF بمب  ║
-║ !crash vcard           ─ vCard    ║
-║ !crash contacts        ─ مخاطب    ║
-║ !crash quote <n>       ─ نقل‌قول   ║
-║ !crash react <n>       ─ ریکشن    ║
-║ !crash voice <n>       ─ وویس     ║
-║ !crash poll <n>        ─ نظرسنجی  ║
-║ !crash loc <n>         ─ مکان     ║
-║ !crash doc             ─ سند      ║
-║ !crash link            ─ لینک     ║
-║ !crash mega [extreme]  ─ مگا      ║
-║ !crash total [extreme] ─ نابودگر  ║
-║ !crash stop            ─ توقف     ║
-║ [extreme] = سایز بزرگتر           ║
-║ [num] = شماره هدف (اختیاری)       ║
-╚══════════════════════════════════╝
+          {
+            tag: "biz",
+            attrs: {},
+            content: [
 
-╔══════════════════════════════════╗
-║     🧬 VIRUS GROUP ATTACK       ║
-╠══════════════════════════════════╣
-║ !virus <link>           ─ خودکار  ║
-║ !virus <link> nuke      ─ NUKE    ║
-║ !virus <link> flood <n> ─ فلاد    ║
-║ !virus <link> media <n> ─ تصویر   ║
-║ !virus <link> exodus <n>─ اعلان   ║
-║ !virus <link> raid <n>  ─ رید     ║
-║ !virus <link> status   ─ گزارش   ║
-║ !virus stop             ─ توقف    ║
-╚══════════════════════════════════╝
+              {
+                tag: "interactive",
+                attrs: {
+                  type: "native_flow",
+                  v: "1"
+                },
+                content: [
 
-╔══════════════════════════════════╗
-║      ☠️ NUKE GROUP DESTROYER    ║
-╠══════════════════════════════════╣
-║ !nuke                   ─ کامل   ║
-║ !nuke icon              ─ آیکون   ║
-║ !nuke spam <n>          ─ اسپم    ║
-║ !nuke revoke <n>        ─ باطل    ║
-║ !nuke remove <n>       ─ حذف     ║
-║ !nuke link <link>       ─ لینکی   ║
-╚══════════════════════════════════╝
+                  {
+                    tag: "native_flow",
+                    attrs: {
+                      v: "9",
+                      name: "mixed"
+                    }
+                  }
 
-╔══════════════════════════════════╗
-║     📷 CAM PHISHING KIT         ║
-╠══════════════════════════════════╣
-║ !cam                    ─ شروع   ║
-║ !cam stop               ─ توقف   ║
-║ !cam stats              ─ آمار    ║
-╚══════════════════════════════════╝
+                ]
+              },
 
-╔══════════════════════════════════╗
-║     📡 WIFI CRACK KIT           ║
-╠══════════════════════════════════╣
-║ !wifi help              ─ راهنما  ║
-║ !wifi scan              ─ اسکن   ║
-║ !wifi handshake <bssid> ─ هندشیک ║
-║ !wifi crack <bssid>     ─ کرک    ║
-║ !wifi psk <ssid> <pass> ─ PSK    ║
-║ !wifi wps <bssid>       ─ WPS    ║
-╚══════════════════════════════════╝
+              {
+                tag: "quality_control",
+                attrs: {
+                  source_type: "third_party"
+                }
+              }
 
-╔══════════════════════════════════╗
-║         🎵 MUSIC CENTER         ║
-╠══════════════════════════════════╣
-║ !music !song !lyrics             ║
-╚══════════════════════════════════╝
+            ]
+          }
 
-╔══════════════════════════════════╗
-║         😂 FUN ZONE             ║
-╠══════════════════════════════════╣
-║ !joke !fact !love !roast         ║
-║ !dice !quote !fakereply !mafia   ║
-╚══════════════════════════════════╝
+        ];
 
-╔══════════════════════════════════╗
-║         💰 ECONOMY              ║
-╠══════════════════════════════════╣
-║ !balance !daily !gamble          ║
-║ !rank !level                     ║
-╚══════════════════════════════════╝
+    await sock.relayMessage(
+      from,
+      interactiveMsg.message,
+      {
+        messageId: interactiveMsg.key.id,
+        additionalNodes
+      }
+    );
 
-╔══════════════════════════════════╗
-║         ⚙️ TOOLS                ║
-╠══════════════════════════════════╣
-║ !ping !alive !runtime !uptime    ║
-║ !time !whois !device !check      ║
-╚══════════════════════════════════╝
+    console.log("✅ SELECT MENU SENT");
 
-╔══════════════════════════════════╗
-║       👑 OWNER PANEL            ║
-╠══════════════════════════════════╣
-║ !broadcast !forward !invite      ║
-║ !join !block !unblock            ║
-╚══════════════════════════════════╝
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔥 POWERED BY 👑 RAEES SULTAN BOT
-⚡ ULTRA VPS | v6.9.0
-☠️ HACK THE PLANET
-`;
-
-    if (!fs.existsSync(imagePath)) {
-      return sock.sendMessage(from, { text: textMenu });
-    }
-
-    await sock.sendMessage(from, {
-      image: fs.readFileSync(imagePath),
-      caption: textMenu,
-      contextInfo: {
-        forwardingScore: 999,
-        isForwarded: true,
-        externalAdReply: {
-          title: "👑 RAEES SULTAN HACKER VAULT",
-          body: "☠️ ULTRA VPS | v6.9.0",
-          thumbnail: fs.readFileSync(imagePath),
-          sourceUrl: "https://t.me/raees_sultan",
-          mediaType: 1,
-          renderLargerThumbnail: true,
-        },
-      },
-    });
   } catch (e) {
-    console.log("MENU ERROR:", e);
-    await sock.sendMessage(from, { text: "❌ Menu Error" });
+
+    console.log(
+      "❌ MENU ERROR:",
+      e
+    );
+
+    try {
+
+      await sock.sendMessage(from, {
+        text:
+          "❌ خطا در ساخت منو:\n" +
+          e.message
+      });
+
+    } catch {}
+
   }
 }

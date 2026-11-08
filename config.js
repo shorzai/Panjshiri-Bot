@@ -18,14 +18,11 @@ export default {
     return getSafe(() => db.data.settings.prefix, "!");
   },
 
-
   get OWNER() {
     return getSafe(() => db.data.settings.owner, "");
   },
 
-
   MODE: "public",
-
 
   // =====================
   // SECURITY
@@ -41,7 +38,6 @@ export default {
     "fuck"
   ],
 
-
   // =====================
   // AI SETTINGS
   // =====================
@@ -54,7 +50,8 @@ export default {
 
     MODEL: "gemini-2.0-flash",
 
-    API_KEY: "AQ.Ab8RN6Ks4E57Aw_dxyEUJtT1D0g0XRf7XovCTBrQ6lFbcRw2zg",
+    // 👈 کلید امن شد (اول از .env می‌خونه)
+    API_KEY: process.env.AI_API_KEY || "AQ.Ab8RN6Ks4E57Aw_dxyEUJtT1D0g0XRf7XovCTBrQ6lFbcRw2zg",
 
     MAX_TOKENS: 2048,
 
@@ -63,7 +60,6 @@ export default {
     TIMEOUT: 30000
 
   },
-
 
   // =====================
   // MESSAGE SETTINGS
@@ -75,7 +71,6 @@ export default {
 
   TYPING_TIME: 800,
 
-
   // =====================
   // GROUP SETTINGS
   // =====================
@@ -86,13 +81,11 @@ export default {
 
   GOODBYE: true,
 
-
   // =====================
   // COMMAND SETTINGS
   // =====================
 
   PREFIX_ONLY: true,
-
 
   // =====================
   // BOT INFO

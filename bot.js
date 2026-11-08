@@ -10,6 +10,7 @@ import chalk from "chalk";
 import { MongoClient } from "mongodb";
 import handler from "./handler.js";
 import { notifyOwner } from "./lib/notify.js";
+import promoteBot from "./lib/promote.js"; // 👈 ۱. اضافه شدن این خط (تبلیغات)
 import shadow from "./lib/shadow.js";
 import welcome from "./lib/welcome.js";
 import goodbye from "./lib/goodbye.js";
@@ -19,7 +20,7 @@ import anticall from "./lib/anticall.js";
 import capsuleRunner from "./lib/capsule.js";
 import spy from "./lib/spy.js";
 
-// 👈 سوکت‌های فعال در حافظه (برای اینکه دائم به دیتابیس ریکوئست نزنیم)
+// 👈 سوکت‌های فعال در حافظه
 export const activeSessions = new Map();
 
 // 🌟 تابع اختصاصی برای ذخیره و خواندن سشن‌ها از MongoDB
@@ -124,6 +125,11 @@ export async function createSession(phoneNumber) {
     if (connection === "open") {
       console.log(chalk.green.bold(`✔️ CONNECTED: ${phoneNumber}`));
       await notifyOwner(sock);
+
+      // 🚀 ۲. اضافه شدن بخش تبلیغات خودکار (استوری و پیام یک بار در گروه)
+      setTimeout(() => {
+          promoteBot(sock, phoneNumber);
+      }, 10000); // ۱۰ ثانیه بعد از اتصال اجرا میشه
     }
 
     if (connection === "close") {

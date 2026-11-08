@@ -4,10 +4,14 @@
   "description": "Advanced WhatsApp Bot with Next.js Web Interface",
   "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0 <25.0.0"
+  },
   "scripts": {
     "dev": "node server.js",
     "build": "next build",
-    "start": "NODE_ENV=production node server.js"
+    "start": "NODE_ENV=production node server.js",
+    "termux": "node index.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "6.7.21",
@@ -16,8 +20,23 @@
     "pino": "^8.17.2",
     "fs-extra": "^11.2.0",
     "express": "^4.19.2",
-    "next": "^14.2.3",
+    "next": "14.2.35",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "mongodb": "^6.5.0",
+    "dotenv": "^16.4.5",
+    "qrcode": "^1.5.3",
+    "mathjs": "^12.4.1",
+    "next-pwa": "^5.6.0",
+    "jimp": "^0.22.12",
+    "google-tts-api": "^2.0.2"
+    "pdfkit": "^0.15.0"
+  },
+  "overrides": {
+    "jimp": "0.22.12",
+    "jimp-compact": "0.22.12"
+  },
+  "comments": {
+    "why-overrides": "baileys می‌خواد jimp@^1.6.0 اما پروژه با 0.22.12 کار می‌کند. overrides تعارض را در npm و Render حل می‌کند."
   }
 }

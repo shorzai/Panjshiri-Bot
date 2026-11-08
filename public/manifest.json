@@ -1,0 +1,21 @@
+{
+  "name": "ربات سلطان شیرزی شتلی",
+  "short_name": "سلطان شیرزی",
+  "description": "سیستم اتصال به ربات واتساپ سلطان شیرزی",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#25D366",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+import asyncio
+import json
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters
+)
+
+TOKEN = "8079572040:AAHNwa6QrQWlHNqspskcjAf2S9vCwEILOGg"
+
+# -------------------------------------------------
+# ⚡ متود POST برای ارسال پیام (مثل API داخلی)
+# -------------------------------------------------
+async def send_messages_post(bot, chat_id, messages: list):
+    """
+    شبیه POST API کار می‌کند.
+    هر متنی که داخل لیست دریافت کند، به هدف ارسال می‌کند.
+    """
+    for msg in messages:
+        await bot.send_message(chat_id=chat_id, text=msg)
+        await asyncio.sleep(1)   # فاصله یک ثانیه بین پیام‌ها
+
+
+# -------------------------------------------------
+# خواندن پیام‌ها از فایل خارجی
+# -------------------------------------------------
+def load_messages():
+    with open("messages.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data["messages"]
+
+
+# -------------------------------------------------
+# /start
+# -------------------------------------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔰 HELP", callback_data="help")]
+    ])
+
+    await update.message.reply_text(
+        "🌟 به روبات سلطان شتلی خوش آمدیدی! 👑🔥\n"
+        "برای ادامه روی دکمه زیر کلیک کن:",
+        reply_markup=keyboard
+    )
+
+
+# -------------------------------------------------
+# دکمه HELP → درخواست شماره
+# -------------------------------------------------
+async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    await query.edit_message_text(
+        "لطفاً شماره واتساپ را وارد کن (با +)\nمثال: +93770000000"
+    )
+    context.user_data["waiting_for_phone"] = True
+
+
+# -------------------------------------------------
+# گرفتن شماره کاربر
+# -------------------------------------------------
+async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get("waiting_for_phone"):
+        return
+
+    phone = update.message.text.strip()
+
+    if not phone.startswith("+") or len(phone) < 8:
+        await update.message.reply_text("❗ شماره درست نیست. مثال: +93770000000")
+        return
+
+    # ذخیره شماره
+    number = phone.replace("+", "")
+    context.user_data["phone"] = number
+    context.user_data["waiting_for_phone"] = False
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🚀 ارسال (POST)", callback_data="send_post")]
+    ])
+
+    await update.message.reply_text(
+        "شماره ثبت شد!\nبرای ارسال پیام‌ها روی دکمه زیر بزن:",
+        reply_markup=keyboard
+    )
+
+
+# -------------------------------------------------
+# ارسال پیام‌ها با متود POST اختصاصی
+# -------------------------------------------------
+async def send_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    number = context.user_data.get("phone")
+
+    if not number:
+        await query.edit_message_text("❗ شماره پیدا نشد. دوباره /start بزن.")
+        return
+
+    messages = load_messages()  # پیام‌ها از فایل خوانده می‌شود
+
+    # 🔥 استفاده از میتود POST برای ارسال پیام
+    await send_messages_post(context.bot, update.effective_chat.id, messages)
+
+    await query.edit_message_text("✔️ پیام‌ها ارسال شدند!")
+
+
+# -------------------------------------------------
+# اجرای روبات
+# -------------------------------------------------
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(help_button, pattern="help"))
+    app.add_handler(CallbackQueryHandler(send_post, pattern="send_post"))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone))
+
+    print("Bot Started...")
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()

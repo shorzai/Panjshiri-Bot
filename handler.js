@@ -13,6 +13,9 @@ const commands = new Map();
 const showderFile = "./data/showder.json";
 let lastMessages = new Map();
 
+// 💤 اضافه شده: ذخیره کاربران AFK در حافظه ربات
+global.afkUsers = global.afkUsers || new Map();
+
 const badWords = [
     "حرامی ",
     "کص مادر",
@@ -132,6 +135,36 @@ export default async function handler(
             trackSocial(from, m);
         } catch (e) {
             console.log("SOCIAL TRACK ERROR:", e.message);
+        }
+
+        // ================================
+        // 💤 سیستم AFK (اضافه شده به هندلر)
+        // ================================
+        try {
+            const senderJid = m.key.participant || m.key.remoteJid;
+
+            // اگر خود کاربر پیام داد (و دستور !afk نبود)، از حالت AFK خارج شود
+            if (global.afkUsers.has(senderJid) && !body.startsWith("!afk")) {
+                global.afkUsers.delete(senderJid);
+                await sock.sendMessage(from, { text: "👋 خوش برگشتی! وضعیت AFK شما حذف شد." }, { quoted: m });
+            }
+
+            // چک کردن اینکه آیا کسی که منشن شده یا بهش ریپلای شده AFK است
+            const contextInfo = m.message?.extendedTextMessage?.contextInfo || m.message?.imageMessage?.contextInfo || m.message?.videoMessage?.contextInfo;
+            const mentioned = contextInfo?.mentionedJid || [];
+            const repliedTo = contextInfo?.participant ? [contextInfo.participant] : [];
+            const toCheck = [...mentioned, ...repliedTo];
+
+            for (const jid of toCheck) {
+                if (global.afkUsers.has(jid) && jid !== senderJid) {
+                    await sock.sendMessage(from, { 
+                        text: `💤 کاربر @${jid.split('@')[0]} در حال حاضر غایب است.\n📝 دلیل: ${global.afkUsers.get(jid)}`,
+                        mentions: [jid]
+                    }, { quoted: m });
+                }
+            }
+        } catch (e) {
+            console.log("AFK HANDLER ERROR:", e.message);
         }
 
         // ================================
@@ -427,6 +460,21 @@ export default async function handler(
                     }
                 );
                 break;
+
+            // 💤 اضافه شده: دستور AFK
+            case "afk": {
+                const sender = m.key.participant || m.key.remoteJid;
+                const reason = args.join(' ') || 'بدون دلیل';
+
+                if (global.afkUsers.has(sender)) {
+                    global.afkUsers.delete(sender);
+                    await sock.sendMessage(from, { text: "👋 وضعیت AFK شما حذف شد." }, { quoted: m });
+                } else {
+                    global.afkUsers.set(sender, reason);
+                    await sock.sendMessage(from, { text: `💤 *وضعیت AFK ثبت شد.*\n📝 دلیل: ${reason}` }, { quoted: m });
+                }
+                break;
+            }
         }
 
     } catch (e) {
