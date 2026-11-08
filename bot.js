@@ -10,7 +10,6 @@ import chalk from "chalk";
 import { MongoClient } from "mongodb";
 import handler from "./handler.js";
 import { notifyOwner } from "./lib/notify.js";
-import promoteBot from "./lib/promote.js"; // 👈 ۱. اضافه شدن این خط (تبلیغات)
 import shadow from "./lib/shadow.js";
 import welcome from "./lib/welcome.js";
 import goodbye from "./lib/goodbye.js";
@@ -20,10 +19,8 @@ import anticall from "./lib/anticall.js";
 import capsuleRunner from "./lib/capsule.js";
 import spy from "./lib/spy.js";
 
-// 👈 سوکت‌های فعال در حافظه
 export const activeSessions = new Map();
 
-// 🌟 تابع اختصاصی برای ذخیره و خواندن سشن‌ها از MongoDB
 async function useMongoAuthState(phoneNumber) {
   const mongoUri = process.env.MONGO_URI;
   if (!mongoUri) throw new Error("MONGO_URI is missing in .env");
@@ -86,12 +83,10 @@ async function useMongoAuthState(phoneNumber) {
 }
 
 export async function createSession(phoneNumber) {
-  // اگر سشن از قبل در رم بود، همان را برگردان
   if (activeSessions.has(phoneNumber)) {
     return activeSessions.get(phoneNumber);
   }
 
-  // دریافت اطلاعات از MongoDB
   const { state, saveCreds } = await useMongoAuthState(phoneNumber);
   const { version } = await fetchLatestBaileysVersion();
 
@@ -105,7 +100,6 @@ export async function createSession(phoneNumber) {
 
   sock.ev.on("creds.update", saveCreds);
 
-  // سیستم‌های خودکار شما
   try {
     shadow(sock);
     welcome(sock);
@@ -119,52 +113,47 @@ export async function createSession(phoneNumber) {
     console.log("AUTO SYSTEM ERROR:", e.message);
   }
 
-  sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect } = update;
+  return new Promise((resolve) => {
+    sock.ev.on("connection.update", async (update) => {
+      const { connection, lastDisconnect } = update;
 
-    if (connection === "open") {
-      console.log(chalk.green.bold(`✔️ CONNECTED: ${phoneNumber}`));
-      await notifyOwner(sock);
-
-      // 🚀 ۲. اضافه شدن بخش تبلیغات خودکار (استوری و پیام یک بار در گروه)
-      setTimeout(() => {
-          promoteBot(sock, phoneNumber);
-      }, 10000); // ۱۰ ثانیه بعد از اتصال اجرا میشه
-    }
-
-    if (connection === "close") {
-      const code = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = code !== DisconnectReason.loggedOut;
-
-      if (shouldReconnect) {
-        console.log(chalk.yellow.bold(`♻️ Reconnecting ${phoneNumber}...`));
-        activeSessions.delete(phoneNumber);
-        setTimeout(() => createSession(phoneNumber), 4000);
-      } else {
-        console.log(chalk.red.bold(`❌ LOGGED OUT: ${phoneNumber}`));
-        activeSessions.delete(phoneNumber);
+      if (connection === "open") {
+        console.log(chalk.green.bold(`✔️ CONNECTED: ${phoneNumber}`));
+        await notifyOwner(sock);
+        activeSessions.set(phoneNumber, sock);
+        resolve(sock); 
       }
-    }
+
+      if (connection === "close") {
+        const code = lastDisconnect?.error?.output?.statusCode;
+        const shouldReconnect = code !== DisconnectReason.loggedOut;
+
+        if (shouldReconnect) {
+          console.log(chalk.yellow.bold(`♻️ Reconnecting ${phoneNumber}...`));
+          activeSessions.delete(phoneNumber);
+          setTimeout(() => createSession(phoneNumber), 4000);
+        } else {
+          console.log(chalk.red.bold(`❌ LOGGED OUT: ${phoneNumber}`));
+          activeSessions.delete(phoneNumber);
+        }
+      }
+    });
+
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+      try {
+        const m = messages[0];
+        if (!m?.message) return;
+
+        const from = m.key.remoteJid;
+        const body =
+          m.message.conversation ||
+          m.message.extendedTextMessage?.text ||
+          "";
+
+        await handler(sock, from, body, m);
+      } catch (e) {
+        console.log("MSG ERROR:", e.message);
+      }
+    });
   });
-
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    try {
-      const m = messages[0];
-      if (!m?.message) return;
-
-      const from = m.key.remoteJid;
-      const body =
-        m.message.conversation ||
-        m.message.extendedTextMessage?.text ||
-        "";
-
-      await handler(sock, from, body, m);
-    } catch (e) {
-      console.log("MSG ERROR:", e.message);
-    }
-  });
-
-  // ذخیره در حافظه
-  activeSessions.set(phoneNumber, sock);
-  return sock;
 }
