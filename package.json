@@ -30,7 +30,11 @@
     "next-pwa": "^5.6.0",
     "jimp": "0.22.12",
     "google-tts-api": "^2.0.2",
-    "pdfkit": "^0.15.0"
+    "pdfkit": "^0.15.0",
+    "cheerio": "^1.0.0",
+    "tsun-dls": "*",
+    "face-api.js": "^0.22.2",
+    "@totallynotdavid/downloader": "*"
   },
   "overrides": {
     "jimp": "0.22.12",
