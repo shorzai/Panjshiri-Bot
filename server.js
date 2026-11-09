@@ -1,7 +1,7 @@
 import express from "express";
 import next from "next";
 import dotenv from "dotenv";
-import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
+import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
 import Pino from "pino";
 import fs from "fs";
 
@@ -15,10 +15,7 @@ const PORT = process.env.PORT || 10000;
 const server = express();
 server.use(express.json());
 
-const pairingCodes = new Map();
-const pairingErrors = new Map();
-
-// مسیر شروع گرفتن کد (فقط درخواست می‌دهد و منتظر می‌ماند)
+// مسیر گرفتن کد (دقیقاً مثل ترموکس)
 server.post("/api/pairing", async (req, res) => {
     try {
         const { phoneNumber } = req.body;
@@ -26,57 +23,39 @@ server.post("/api/pairing", async (req, res) => {
             return res.status(400).json({ success: false, error: "شماره نامعتبر است." });
         }
 
-        if (pairingCodes.has(phoneNumber)) {
-            return res.json({ success: true, code: pairingCodes.get(phoneNumber) });
-        }
-
         const sessionDir = `./session_${phoneNumber}`;
         if (fs.existsSync(sessionDir)) fs.rmSync(sessionDir, { recursive: true, force: true });
 
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+        const { version } = await fetchLatestBaileysVersion();
+
         const sock = makeWASocket({
             auth: state,
+            version,
             logger: Pino({ level: "silent" }),
-            printQRInTerminal: false,
-            browser: ["Ubuntu", "Chrome", "120.0.0"]
+            browser: ["Ubuntu", "Chrome", "120.0.0"],
+            printQRInTerminal: false
         });
 
         sock.ev.on("creds.update", saveCreds);
 
-        // 🚀 اینجا منتظر سیگنال آماده شدن واتساپ می‌مانیم
-        sock.ev.on("connection.update", async (update) => {
-            const { qr } = update;
-            if (qr) {
-                try {
-                    console.log(`[API] Requesting code for ${phoneNumber}...`);
-                    const code = await sock.requestPairingCode(phoneNumber);
-                    pairingCodes.set(phoneNumber, code);
-                    console.log(`[API] Success: ${code}`);
-                    sock.end(undefined); 
-                } catch (err) {
-                    console.error(`[API] Error:`, err.message);
-                    pairingErrors.set(phoneNumber, err.message);
-                }
-            }
-        });
+        // ⏳ صبر می‌کنیم (مثل وقتی که کاربر داره شماره رو تایپ می‌کنه)
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
-        return res.json({ success: true, processing: true });
+        // حالا کد رو می‌گیریم
+        const code = await sock.requestPairingCode(phoneNumber);
+        
+        if (!code) throw new Error("کد دریافت نشد.");
+        
+        console.log(`✅ Code generated: ${code}`);
+        try { sock.end(undefined); } catch(e) {}
+        
+        return res.json({ success: true, code });
 
     } catch (error) {
+        console.error("❌ Pairing Error:", error.message);
         return res.status(500).json({ success: false, error: error.message });
     }
-});
-
-// مسیر چک کردن وضعیت (سایت هر ۲ ثانیه این را صدا می‌زند)
-server.get("/api/pairing/status", (req, res) => {
-    const { phoneNumber } = req.query;
-    if (pairingCodes.has(phoneNumber)) {
-        return res.json({ success: true, code: pairingCodes.get(phoneNumber) });
-    }
-    if (pairingErrors.has(phoneNumber)) {
-        return res.json({ success: false, error: pairingErrors.get(phoneNumber) });
-    }
-    return res.json({ success: true, processing: true });
 });
 
 server.get("/health", (req, res) => res.send("OK"));
