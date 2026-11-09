@@ -1,5 +1,4 @@
-import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
-import Pino from "pino";
+import { createSession } from "../../bot.js";
 import fs from "fs";
 
 export default async function handler(req, res) {
@@ -9,32 +8,34 @@ export default async function handler(req, res) {
 
     try {
         const { phoneNumber } = req.body;
-
         if (!phoneNumber || !/^\d{10,15}$/.test(phoneNumber)) {
             return res.status(400).json({ success: false, error: "شماره نامعتبر است." });
         }
 
-        // استفاده از یک پوشه موقت برای گرفتن کد (بدون دیتابیس)
-        const tempDir = `./temp_session_${phoneNumber}`;
-        const { state, saveCreds } = await useMultiFileAuthState(tempDir);
+        // پاک کردن فایل کد قبلی (اگر وجود دارد)
+        const codeFile = `./temp_code_${phoneNumber}.txt`;
+        if (fs.existsSync(codeFile)) fs.unlinkSync(codeFile);
 
-        const sock = makeWASocket({
-            auth: state,
-            logger: Pino({ level: "silent" }),
-            printQRInTerminal: false,
-            browser: ["Ubuntu", "Chrome", "120.0.0"],
-        });
+        // شروع فرآیند در پس‌زمینه
+        createSession(phoneNumber).catch(e => console.error(e));
 
-        sock.ev.on("creds.update", saveCreds);
-
-        // درخواست کد بلافاصله
-        const code = await sock.requestPairingCode(phoneNumber);
-
-        if (!code) {
-            throw new Error("کد دریافت نشد.");
+        // انتظار برای تولید کد (حداکثر ۱۵ ثانیه)
+        let code = null;
+        let attempts = 0;
+        while (!code && attempts < 150) {
+            if (fs.existsSync(codeFile)) {
+                code = fs.readFileSync(codeFile, "utf8");
+                fs.unlinkSync(codeFile); // پاک کردن فایل بعد از خواندن
+            } else {
+                await new Promise(r => setTimeout(r, 100));
+                attempts++;
+            }
         }
 
-        console.log(`[API] Code generated instantly: ${code}`);
+        if (!code) {
+            throw new Error("زمان تولید کد به پایان رسید. لطفا دوباره تلاش کنید.");
+        }
+
         return res.json({ success: true, code });
 
     } catch (error) {

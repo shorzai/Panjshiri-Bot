@@ -34,7 +34,6 @@ async function getMongoCollection(phoneNumber) {
 
 async function useMongoAuthState(phoneNumber) {
   const collection = await getMongoCollection(phoneNumber);
-
   const writeData = async (data, key) => {
     await collection.updateOne(
       { _id: `${phoneNumber}_${key}` },
@@ -42,18 +41,14 @@ async function useMongoAuthState(phoneNumber) {
       { upsert: true }
     );
   };
-
   const readData = async (key) => {
     const doc = await collection.findOne({ _id: `${phoneNumber}_${key}` });
     return doc ? JSON.parse(doc.data, BufferJSON.reviver) : null;
   };
-
   const removeData = async (key) => {
     await collection.deleteOne({ _id: `${phoneNumber}_${key}` });
   };
-
   const creds = (await readData("creds")) || initAuthCreds();
-
   return {
     state: {
       creds,
@@ -117,7 +112,20 @@ export async function createSession(phoneNumber) {
   } catch (e) {}
 
   sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect } = update;
+    const { connection, lastDisconnect, qr } = update;
+
+    // 🚀 اینجا سیگنال آماده شدن واتساپ را می‌گیریم و کد را درخواست می‌کنیم
+    if (qr && !sock.authState.creds.registered) {
+      try {
+        const code = await sock.requestPairingCode(phoneNumber);
+        console.log(`✅ Code generated: ${code}`);
+        // کد را در یک فایل موقت ذخیره می‌کنیم تا API بتواند آن را بخواند
+        const fs = await import("fs");
+        fs.writeFileSync(`./temp_code_${phoneNumber}.txt`, code);
+      } catch (err) {
+        console.log("❌ Error requesting pairing code:", err.message);
+      }
+    }
 
     if (connection === "open") {
       console.log(chalk.green.bold(`✔️ CONNECTED: ${phoneNumber}`));
@@ -140,7 +148,7 @@ export async function createSession(phoneNumber) {
       const m = messages[0];
       if (!m?.message) return;
       const from = m.key.remoteJid;
-      const body = m.message.conversation || m.message.extendedTextMessage?.text || "";
+      const body = m.message.conversation || m.message.extendedMessage?.text || "";
       await handler(sock, from, body, m);
     } catch (e) {}
   });
