@@ -21,7 +21,6 @@ import spy from "./lib/spy.js";
 export const activeSessions = new Map();
 let cachedMongoClient = null;
 
-// تابع اتصال به مونگو با تایم اوت (تا اگر قطع بود، سریع ارور بده)
 async function getMongoCollection(phoneNumber) {
   const mongoUri = process.env.MONGO_URI;
   if (!mongoUri) throw new Error("MONGO_URI is missing in .env");
@@ -96,9 +95,9 @@ export async function createSession(phoneNumber) {
 
   const { state, saveCreds } = await useMongoAuthState(phoneNumber);
   
-  // 🚨 حذف fetchLatestBaileysVersion برای جلوگیری از هنگ کردن روی رندر
   const sock = makeWASocket({
     auth: state,
+    mobile: phoneNumber, // 🚀 این خط باعث میشه فوری کد بسازه
     logger: Pino({ level: "silent" }),
     browser: ["Ubuntu", "Chrome", "120.0.0"],
     printQRInTerminal: false
@@ -116,9 +115,7 @@ export async function createSession(phoneNumber) {
     anticall(sock);
     capsuleRunner(sock);
     spy(sock);
-  } catch (e) {
-    console.log("AUTO SYSTEM ERROR:", e.message);
-  }
+  } catch (e) {}
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update;
@@ -130,14 +127,10 @@ export async function createSession(phoneNumber) {
 
     if (connection === "close") {
       const code = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = code !== DisconnectReason.loggedOut;
-
-      if (shouldReconnect) {
-        console.log(chalk.yellow.bold(`♻️ Reconnecting ${phoneNumber}...`));
+      if (code !== DisconnectReason.loggedOut) {
         activeSessions.delete(phoneNumber);
         setTimeout(() => createSession(phoneNumber), 4000);
       } else {
-        console.log(chalk.red.bold(`❌ LOGGED OUT: ${phoneNumber}`));
         activeSessions.delete(phoneNumber);
       }
     }
@@ -147,17 +140,10 @@ export async function createSession(phoneNumber) {
     try {
       const m = messages[0];
       if (!m?.message) return;
-
       const from = m.key.remoteJid;
-      const body =
-        m.message.conversation ||
-        m.message.extendedTextMessage?.text ||
-        "";
-
+      const body = m.message.conversation || m.message.extendedTextMessage?.text || "";
       await handler(sock, from, body, m);
-    } catch (e) {
-      console.log("MSG ERROR:", e.message);
-    }
+    } catch (e) {}
   });
 
   return sock;

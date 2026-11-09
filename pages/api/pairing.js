@@ -1,8 +1,5 @@
 import { createSession } from "../../bot.js";
 
-export const maxDuration = 60;
-export const dynamic = "force-dynamic";
-
 export default async function handler(req, res) {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed" });
@@ -12,38 +9,29 @@ export default async function handler(req, res) {
         const { phoneNumber } = req.body;
 
         if (!phoneNumber || !/^\d{10,15}$/.test(phoneNumber)) {
-            return res.status(400).json({
-                success: false,
-                error: "شماره نامعتبر است. مثال: 93781234567"
-            });
+            return res.status(400).json({ success: false, error: "شماره نامعتبر است." });
         }
 
-        console.log(`⏳ 1. Creating session for ${phoneNumber}...`);
         const sock = await createSession(phoneNumber);
-        console.log(`✅ 2. Session created.`);
-
+        
         if (sock.authState.creds.registered) {
-            return res.json({
-                success: false,
-                error: "این شماره قبلاً به ربات متصل شده است."
-            });
+            return res.json({ success: false, error: "این شماره قبلاً متصل شده است." });
         }
 
-        console.log(`⏳ 3. Requesting pairing code...`);
-        const code = await sock.requestPairingCode(phoneNumber);
-        console.log(`✅ 4. Code received: ${code}`);
-
-        if (!code) {
-            throw new Error("کد دریافت نشد. لطفاً دوباره تلاش کنید.");
+        // 🚀 حلقه بی‌نهایت: تا وقتی کد نده، دست برنمی‌داره (بدون تایم‌اوت)
+        let code = null;
+        while (!code) {
+            try {
+                code = await sock.requestPairingCode(phoneNumber);
+            } catch (e) {
+                await new Promise(r => setTimeout(r, 100)); // هر 100 میلی‌ثانیه یه بار امتحان میکنه
+            }
         }
 
         return res.json({ success: true, code });
 
     } catch (error) {
-        console.error("❌ Pairing error:", error);
-        return res.status(500).json({
-            success: false,
-            error: error.message || "خطا در تولید کد."
-        });
+        console.error("Pairing error:", error);
+        return res.status(500).json({ success: false, error: error.message });
     }
 }
