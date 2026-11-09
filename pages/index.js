@@ -20,11 +20,37 @@ export default function Home() {
             });
             const data = await res.json();
 
-            if (data.success) setCode(data.code);
-            else setError(data.error);
+            if (data.success && data.code) {
+                setCode(data.code);
+                setLoading(false);
+                return;
+            }
+
+            const interval = setInterval(async () => {
+                const statusRes = await fetch(`/api/pairing/status?phoneNumber=${phone}`);
+                const statusData = await statusRes.json();
+
+                if (statusData.success && statusData.code) {
+                    clearInterval(interval);
+                    setCode(statusData.code);
+                    setLoading(false);
+                } else if (statusData.success === false) {
+                    clearInterval(interval);
+                    setError(statusData.error);
+                    setLoading(false);
+                }
+            }, 2000);
+
+            setTimeout(() => {
+                clearInterval(interval);
+                if (loading) {
+                    setError("زمان زیادی طول کشید. لطفا دوباره تلاش کنید.");
+                    setLoading(false);
+                }
+            }, 30000);
+
         } catch (e) {
             setError("خطای شبکه: " + e.message);
-        } finally {
             setLoading(false);
         }
     }
@@ -32,135 +58,244 @@ export default function Home() {
     return (
         <>
             <Head>
-                <title>RAEES SULTAN BOT | ربات سلطان شیرزی</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <meta name="description" content="سیستم اتصال به ربات واتساپ" />
+                <title>RAEES SULTAN BOT | SYSTEM</title>
+                <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap" rel="stylesheet" />
             </Head>
 
-            <div style={{
-                minHeight: "100vh",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                background: "linear-gradient(135deg, #0f2027, #203a43, #2c5364)",
-                fontFamily: "system-ui, -apple-system, sans-serif",
-                padding: "20px",
-                direction: "rtl"
-            }}>
-                <main style={{
-                    background: "rgba(255, 255, 255, 0.05)",
-                    backdropFilter: "blur(12px)",
-                    WebkitBackdropFilter: "blur(12px)",
-                    border: "1px solid rgba(255, 255, 255, 0.1)",
-                    borderRadius: "24px",
-                    padding: "40px 30px",
-                    maxWidth: "400px",
-                    width: "100%",
-                    textAlign: "center",
-                    boxShadow: "0 25px 45px rgba(0,0,0,0.2)"
-                }}>
+            <div className="cyber-container">
+                <div className="grid-bg"></div>
+                <div className="scanlines"></div>
+                
+                <main className="cyber-card">
+                    <div className="glitch-wrapper">
+                        <img src="/logo.png" alt="Logo" className="cyber-logo" />
+                    </div>
                     
-                    {/* لوگو */}
-                    <img 
-                        src="/logo.png" 
-                        alt="Sultan Shirzai Logo" 
-                        style={{ 
-                            width: "120px", 
-                            height: "120px",
-                            objectFit: "cover",
-                            borderRadius: "50%", 
-                            marginBottom: "20px", 
-                            border: "4px solid #25D366",
-                            boxShadow: "0 0 20px rgba(37, 211, 102, 0.4)"
-                        }} 
-                    />
-
-                    <h2 style={{ color: "#ffffff", marginBottom: "10px", fontSize: "22px", fontWeight: "bold" }}>
-                        به ربات سلطان شیرزی خوش آمدید
-                    </h2>
+                    <h1 className="cyber-title">SYSTEM ONLINE</h1>
+                    <p className="cyber-subtitle">RAEES SULTAN BOT // ACCESS TERMINAL</p>
                     
-                    <p style={{ color: "#a0aab5", marginBottom: "30px", fontSize: "14px" }}>
-                        شماره خود را با کد کشور (بدون +) وارد کنید
-                    </p>
+                    <div className="input-group">
+                        <span className="prompt">>{">"}</span>
+                        <input 
+                            type="tel" 
+                            placeholder="ENTER TARGET NUMBER..." 
+                            value={phone} 
+                            onChange={e => setPhone(e.target.value)} 
+                            className="cyber-input"
+                        />
+                    </div>
                     
-                    <input
-                        type="tel"
-                        placeholder="93794384087"
-                        value={phone}
-                        onChange={e => setPhone(e.target.value)}
-                        style={{ 
-                            width: "100%", 
-                            padding: "15px", 
-                            fontSize: "16px", 
-                            marginBottom: "20px", 
-                            background: "rgba(255, 255, 255, 0.08)",
-                            border: "1px solid rgba(255, 255, 255, 0.2)",
-                            borderRadius: "12px",
-                            color: "#ffffff",
-                            textAlign: "center",
-                            direction: "ltr",
-                            outline: "none",
-                            boxSizing: "border-box"
-                        }}
-                    />
-                    
-                    <button
-                        onClick={requestCode}
-                        disabled={loading}
-                        style={{
-                            width: "100%", 
-                            padding: "15px", 
-                            background: "linear-gradient(90deg, #25D366, #128C7E)", 
-                            color: "white",
-                            border: "none", 
-                            borderRadius: "12px", 
-                            cursor: loading ? "not-allowed" : "pointer", 
-                            fontSize: "16px", 
-                            fontWeight: "bold",
-                            boxShadow: "0 4px 15px rgba(37, 211, 102, 0.3)",
-                            transition: "transform 0.2s",
-                            boxSizing: "border-box"
-                        }}
+                    <button 
+                        onClick={requestCode} 
+                        disabled={loading} 
+                        className={`cyber-btn ${loading ? 'loading' : ''}`}
                     >
-                        {loading ? "⏳ در حال دریافت..." : "دریافت کد اتصال"}
+                        {loading ? "INITIALIZING..." : "[ ESTABLISH CONNECTION ]"}
                     </button>
 
                     {code && (
-                        <div style={{ background: "rgba(37, 211, 102, 0.15)", border: "1px solid #25D366", padding: "20px", marginTop: "25px", borderRadius: "12px" }}>
-                            <p style={{ color: "#25D366", margin: "0 0 10px 0", fontWeight: "bold" }}>کد اتصال شما:</p>
-                            <div style={{ fontSize: "32px", letterSpacing: "5px", fontWeight: "900", direction: "ltr", color: "#ffffff" }}>
-                                {code}
+                        <div className="cyber-alert success">
+                            <p className="alert-title">✅ ACCESS GRANTED</p>
+                            <div className="code-box">
+                                <span className="code-text">{code}</span>
                             </div>
-                            <p style={{ fontSize: "13px", color: "#a0aab5", marginTop: "15px", lineHeight: "1.6" }}>
-                                واتساپ ← Linked Devices ← Link with phone number
-                            </p>
+                            <p className="alert-desc">LINK DEVICE VIA WHATSAPP</p>
                         </div>
                     )}
 
                     {error && (
-                        <div style={{ background: "rgba(255, 75, 75, 0.15)", border: "1px solid #ff4b4b", padding: "15px", marginTop: "25px", borderRadius: "12px", color: "#ff4b4b", fontSize: "14px" }}>
-                            {error}
+                        <div className="cyber-alert error">
+                            <p className="alert-title">❌ CONNECTION FAILED</p>
+                            <p className="alert-desc">{error}</p>
                         </div>
                     )}
 
-                    {/* خط جداکننده */}
-                    <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.1)", margin: "30px 0 20px 0" }} />
-
-                    {/* لینک کانال و پشتیبانی */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                        <a href="https://whatsapp.com/channel/0029VbDOqY8DOQIcTC1Epm2H" target="_blank" rel="noreferrer" style={{
-                            display: "block", width: "100%", padding: "12px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "#e0e0e0", textDecoration: "none", fontSize: "14px", boxSizing: "border-box"
-                        }}>
-                            📢 ورود به کانال واتساپ
+                    <div className="cyber-footer">
+                        <a href="https://whatsapp.com/channel/0029VbDOqY8DOQIcTC1Epm2H" target="_blank" rel="noreferrer" className="footer-link">
+                            [ 📢 JOIN CHANNEL ]
                         </a>
-                        <a href="https://wa.me/93794384087" target="_blank" rel="noreferrer" style={{
-                            display: "block", width: "100%", padding: "12px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "#e0e0e0", textDecoration: "none", fontSize: "14px", boxSizing: "border-box"
-                        }}>
-                            📞 پشتیبانی (سلطان شیرزی)
+                        <a href="https://wa.me/93794384087" target="_blank" rel="noreferrer" className="footer-link">
+                            [ 📞 SUPPORT ]
                         </a>
                     </div>
-
                 </main>
+
+                <style jsx>{`
+                    .cyber-container {
+                        min-height: 100vh;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        background-color: #050505;
+                        font-family: 'Fira Code', monospace;
+                        position: relative;
+                        overflow: hidden;
+                        direction: ltr;
+                    }
+                    .grid-bg {
+                        position: absolute;
+                        top: 0; left: 0; right: 0; bottom: 0;
+                        background-image: 
+                            linear-gradient(rgba(37, 211, 102, 0.05) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(37, 211, 102, 0.05) 1px, transparent 1px);
+                        background-size: 30px 30px;
+                        z-index: 0;
+                    }
+                    .scanlines {
+                        position: absolute;
+                        top: 0; left: 0; right: 0; bottom: 0;
+                        background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.2));
+                        background-size: 100% 4px;
+                        z-index: 1;
+                        pointer-events: none;
+                    }
+                    .cyber-card {
+                        position: relative;
+                        z-index: 2;
+                        background: rgba(10, 15, 10, 0.85);
+                        border: 1px solid #25D366;
+                        border-radius: 4px;
+                        padding: 40px 30px;
+                        width: 100%;
+                        max-width: 420px;
+                        box-shadow: 0 0 20px rgba(37, 211, 102, 0.15), inset 0 0 20px rgba(37, 211, 102, 0.05);
+                        text-align: center;
+                    }
+                    .glitch-wrapper {
+                        margin-bottom: 20px;
+                    }
+                    .cyber-logo {
+                        width: 120px;
+                        height: 120px;
+                        border-radius: 50%;
+                        border: 2px solid #25D366;
+                        box-shadow: 0 0 20px rgba(37, 211, 102, 0.5);
+                        animation: pulse 2s infinite alternate;
+                    }
+                    @keyframes pulse {
+                        0% { box-shadow: 0 0 10px rgba(37, 211, 102, 0.3); }
+                        100% { box-shadow: 0 0 30px rgba(37, 211, 102, 0.8); }
+                    }
+                    .cyber-title {
+                        color: #25D366;
+                        font-size: 24px;
+                        margin: 0 0 5px 0;
+                        letter-spacing: 2px;
+                    }
+                    .cyber-subtitle {
+                        color: #00ffcc;
+                        font-size: 11px;
+                        margin-bottom: 30px;
+                        opacity: 0.8;
+                    }
+                    .input-group {
+                        display: flex;
+                        align-items: center;
+                        border-bottom: 2px solid #25D366;
+                        margin-bottom: 25px;
+                        padding-bottom: 5px;
+                    }
+                    .prompt {
+                        color: #25D366;
+                        font-size: 20px;
+                        margin-right: 10px;
+                        font-weight: bold;
+                    }
+                    .cyber-input {
+                        background: transparent;
+                        border: none;
+                        color: #fff;
+                        font-family: 'Fira Code', monospace;
+                        font-size: 16px;
+                        width: 100%;
+                        outline: none;
+                        text-align: left;
+                        letter-spacing: 1px;
+                    }
+                    .cyber-input::placeholder {
+                        color: rgba(255,255,255,0.3);
+                    }
+                    .cyber-btn {
+                        width: 100%;
+                        padding: 15px;
+                        background: transparent;
+                        color: #25D366;
+                        border: 1px solid #25D366;
+                        font-family: 'Fira Code', monospace;
+                        font-size: 14px;
+                        font-weight: bold;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        letter-spacing: 1px;
+                        margin-bottom: 20px;
+                    }
+                    .cyber-btn:hover:not(.loading) {
+                        background: rgba(37, 211, 102, 0.2);
+                        box-shadow: 0 0 15px rgba(37, 211, 102, 0.4);
+                    }
+                    .cyber-btn.loading {
+                        animation: blink 1s infinite;
+                        cursor: wait;
+                    }
+                    @keyframes blink {
+                        50% { opacity: 0.5; }
+                    }
+                    .cyber-alert {
+                        padding: 15px;
+                        margin-bottom: 20px;
+                        border-left: 4px solid;
+                        text-align: left;
+                    }
+                    .cyber-alert.success {
+                        background: rgba(37, 211, 102, 0.1);
+                        border-color: #25D366;
+                    }
+                    .cyber-alert.error {
+                        background: rgba(255, 75, 75, 0.1);
+                        border-color: #ff4b4b;
+                    }
+                    .alert-title {
+                        margin: 0 0 10px 0;
+                        font-weight: bold;
+                        font-size: 14px;
+                        color: #fff;
+                    }
+                    .code-box {
+                        background: #000;
+                        padding: 15px;
+                        border: 1px dashed #25D366;
+                        text-align: center;
+                        margin: 10px 0;
+                    }
+                    .code-text {
+                        font-size: 32px;
+                        color: #25D366;
+                        font-weight: bold;
+                        letter-spacing: 4px;
+                        text-shadow: 0 0 10px rgba(37, 211, 102, 0.5);
+                    }
+                    .alert-desc {
+                        color: #a0aab5;
+                        font-size: 12px;
+                        margin: 0;
+                    }
+                    .cyber-footer {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-top: 30px;
+                        border-top: 1px solid rgba(37, 211, 102, 0.2);
+                        padding-top: 20px;
+                    }
+                    .footer-link {
+                        color: #00ffcc;
+                        text-decoration: none;
+                        font-size: 12px;
+                        transition: 0.3s;
+                    }
+                    .footer-link:hover {
+                        text-shadow: 0 0 10px #00ffcc;
+                    }
+                `}</style>
             </div>
         </>
     );
