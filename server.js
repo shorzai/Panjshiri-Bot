@@ -1,12 +1,11 @@
 import express from "express";
 import next from "next";
 import dotenv from "dotenv";
-import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
+import makeWASocket, { initAuthCreds, BufferJSON, proto } from "@whiskeysockets/baileys";
 import Pino from "pino";
-import fs from "fs";
+import { MongoClient } from "mongodb";
 
 dotenv.config();
-
 const dev = process.env.NODE_ENV !== "production";
 const nextApp = next({ dev });
 const handle = nextApp.getRequestHandler();
@@ -15,8 +14,58 @@ const PORT = process.env.PORT || 10000;
 const server = express();
 server.use(express.json());
 
-// 🚀 حافظه‌ای برای نگه داشتن سوکت‌ها (تا بعد از کد دادن قطع نشوند)
-const activeSockets = new Map();
+let cachedMongoClient = null;
+async function useMongoAuthState(phoneNumber) {
+    const mongoUri = process.env.MONGO_URI;
+    if (!mongoUri) throw new Error("MONGO_URI is missing");
+
+    if (!cachedMongoClient) {
+        cachedMongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 5000 });
+        await cachedMongoClient.connect();
+    }
+    const collection = cachedMongoClient.db("raees_bot").collection("sessions");
+
+    const writeData = async (data, key) => {
+        await collection.updateOne({ _id: `${phoneNumber}_${key}` }, { $set: { data: JSON.stringify(data, BufferJSON.replacer) } }, { upsert: true });
+    };
+    const readData = async (key) => {
+        const doc = await collection.findOne({ _id: `${phoneNumber}_${key}` });
+        return doc ? JSON.parse(doc.data, BufferJSON.reviver) : null;
+    };
+    const removeData = async (key) => {
+        await collection.deleteOne({ _id: `${phoneNumber}_${key}` });
+    };
+    const creds = (await readData("creds")) || initAuthCreds();
+
+    return {
+        state: {
+            creds,
+            keys: {
+                get: async (type, ids) => {
+                    const data = {};
+                    await Promise.all(ids.map(async (id) => {
+                        let value = await readData(`${type}-${id}`);
+                        if (type === "app-state-sync-key" && value) value = proto.Message.AppStateSyncKeyData.fromObject(value);
+                        data[id] = value;
+                    }));
+                    return data;
+                },
+                set: async (data) => {
+                    const tasks = [];
+                    for (const category in data) {
+                        for (const id in data[category]) {
+                            const value = data[category][id];
+                            const key = `${category}-${id}`;
+                            tasks.push(value ? writeData(value, key) : removeData(key));
+                        }
+                    }
+                    await Promise.all(tasks);
+                },
+            },
+        },
+        saveCreds: () => writeData(creds, "creds"),
+    };
+}
 
 server.post("/api/pairing", async (req, res) => {
     try {
@@ -26,16 +75,7 @@ server.post("/api/pairing", async (req, res) => {
         }
 
         console.log(`[API] Request for ${phoneNumber}`);
-
-        // اگر از قبل سوکت باز است، از همون استفاده کن
-        if (activeSockets.has(phoneNumber)) {
-            console.log(`[API] Using existing socket for ${phoneNumber}`);
-        }
-
-        const sessionDir = `./session_${phoneNumber}`;
-        if (fs.existsSync(sessionDir)) fs.rmSync(sessionDir, { recursive: true, force: true });
-
-        const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+        const { state, saveCreds } = await useMongoAuthState(phoneNumber);
         
         const sock = makeWASocket({
             auth: state,
@@ -44,37 +84,36 @@ server.post("/api/pairing", async (req, res) => {
             browser: ["Ubuntu", "Chrome", "120.0.0"]
         });
 
-        // 🚨 ذخیره سوکت در حافظه
-        activeSockets.set(phoneNumber, sock);
         sock.ev.on("creds.update", saveCreds);
 
-        // منتظر سیگنال آماده شدن واتساپ می‌مانیم
-        let code = null;
-        const codePromise = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error("واتساپ پاسخ نداد. دوباره تلاش کنید.")), 20000);
+        if (sock.authState.creds.registered) {
+            return res.json({ success: false, error: "این شماره قبلاً متصل شده است." });
+        }
 
-            sock.ev.on("connection.update", async (update) => {
-                if (update.qr) {
-                    try {
-                        clearTimeout(timeout);
-                        console.log(`[API] WhatsApp ready, requesting code...`);
-                        code = await sock.requestPairingCode(phoneNumber);
-                        resolve();
-                    } catch (err) {
-                        clearTimeout(timeout);
-                        reject(err);
-                    }
-                }
-            });
-        });
+        // ⏳ دقیقاً ۵ ثانیه صبر می‌کنیم (مثل کدی که کد ۸ رقمی داد)
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
-        await codePromise;
-
-        if (!code) throw new Error("کد دریافت نشد.");
-
-        console.log(`[API] Success: ${code}`);
+        // گرفتن کد ۸ رقمی
+        const code = await sock.requestPairingCode(phoneNumber);
         
-        // 🚨 اینجا دیگه sock.end() نداریم! سوکت زنده می‌مونه تا کاربر کد رو بزنه.
+        if (!code) throw new Error("کد دریافت نشد.");
+        
+        console.log(`✅ Code generated for ${phoneNumber}: ${code}`);
+        
+        // 🚨 اینجا sock.end() رو نداریم تا قطع نشه.
+
+        // 🟢 وقتی کاربر کد رو زد و وصل شد، ربات اصلی لود میشه
+        sock.ev.on("connection.update", async (update) => {
+            if (update.connection === "open") {
+                console.log(`✅ CONNECTED: ${phoneNumber}`);
+                const { default: handler } = await import("./handler.js");
+                sock.ev.on("messages.upsert", async ({ messages }) => {
+                    const m = messages[0];
+                    if (!m?.message) return;
+                    await handler(sock, m.key.remoteJid, m.message.conversation || m.message.extendedTextMessage?.text || "", m);
+                });
+            }
+        });
 
         return res.json({ success: true, code });
 
@@ -85,10 +124,7 @@ server.post("/api/pairing", async (req, res) => {
 });
 
 server.get("/health", (req, res) => res.send("OK"));
-
 nextApp.prepare().then(() => {
     server.all("*", (req, res) => handle(req, res));
-    server.listen(PORT, () => {
-        console.log(`🚀 Web server listening on port ${PORT}`);
-    });
+    server.listen(PORT, () => console.log(`🚀 Web server listening on port ${PORT}`));
 });
