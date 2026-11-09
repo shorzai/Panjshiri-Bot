@@ -23,7 +23,6 @@ export default async function handler(req, res) {
             logger: Pino({ level: "silent" }),
             printQRInTerminal: false,
             browser: ["Ubuntu", "Chrome", "120.0.0"],
-            mobile: phoneNumber
         });
 
         sock.ev.on("creds.update", saveCreds);

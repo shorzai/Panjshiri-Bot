@@ -97,7 +97,6 @@ export async function createSession(phoneNumber) {
   
   const sock = makeWASocket({
     auth: state,
-    mobile: phoneNumber, // 🚀 این خط باعث میشه فوری کد بسازه
     logger: Pino({ level: "silent" }),
     browser: ["Ubuntu", "Chrome", "120.0.0"],
     printQRInTerminal: false
