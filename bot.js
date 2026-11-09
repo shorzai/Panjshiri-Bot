@@ -98,6 +98,9 @@ export async function createSession(phoneNumber) {
     printQRInTerminal: false
   });
 
+  // ذخیره سوکت در حافظه بلافاصله
+  activeSessions.set(phoneNumber, sock);
+
   sock.ev.on("creds.update", saveCreds);
 
   try {
@@ -113,47 +116,46 @@ export async function createSession(phoneNumber) {
     console.log("AUTO SYSTEM ERROR:", e.message);
   }
 
-  return new Promise((resolve) => {
-    sock.ev.on("connection.update", async (update) => {
-      const { connection, lastDisconnect } = update;
+  sock.ev.on("connection.update", async (update) => {
+    const { connection, lastDisconnect } = update;
 
-      if (connection === "open") {
-        console.log(chalk.green.bold(`✔️ CONNECTED: ${phoneNumber}`));
-        await notifyOwner(sock);
-        activeSessions.set(phoneNumber, sock);
-        resolve(sock); 
+    if (connection === "open") {
+      console.log(chalk.green.bold(`✔️ CONNECTED: ${phoneNumber}`));
+      await notifyOwner(sock);
+    }
+
+    if (connection === "close") {
+      const code = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = code !== DisconnectReason.loggedOut;
+
+      if (shouldReconnect) {
+        console.log(chalk.yellow.bold(`♻️ Reconnecting ${phoneNumber}...`));
+        activeSessions.delete(phoneNumber);
+        setTimeout(() => createSession(phoneNumber), 4000);
+      } else {
+        console.log(chalk.red.bold(`❌ LOGGED OUT: ${phoneNumber}`));
+        activeSessions.delete(phoneNumber);
       }
-
-      if (connection === "close") {
-        const code = lastDisconnect?.error?.output?.statusCode;
-        const shouldReconnect = code !== DisconnectReason.loggedOut;
-
-        if (shouldReconnect) {
-          console.log(chalk.yellow.bold(`♻️ Reconnecting ${phoneNumber}...`));
-          activeSessions.delete(phoneNumber);
-          setTimeout(() => createSession(phoneNumber), 4000);
-        } else {
-          console.log(chalk.red.bold(`❌ LOGGED OUT: ${phoneNumber}`));
-          activeSessions.delete(phoneNumber);
-        }
-      }
-    });
-
-    sock.ev.on("messages.upsert", async ({ messages }) => {
-      try {
-        const m = messages[0];
-        if (!m?.message) return;
-
-        const from = m.key.remoteJid;
-        const body =
-          m.message.conversation ||
-          m.message.extendedTextMessage?.text ||
-          "";
-
-        await handler(sock, from, body, m);
-      } catch (e) {
-        console.log("MSG ERROR:", e.message);
-      }
-    });
+    }
   });
+
+  sock.ev.on("messages.upsert", async ({ messages }) => {
+    try {
+      const m = messages[0];
+      if (!m?.message) return;
+
+      const from = m.key.remoteJid;
+      const body =
+        m.message.conversation ||
+        m.message.extendedTextMessage?.text ||
+        "";
+
+      await handler(sock, from, body, m);
+    } catch (e) {
+      console.log("MSG ERROR:", e.message);
+    }
+  });
+
+  // 👈 سوکت رو بلافاصله برمی‌گردونیم بدون اینکه منتظر open شدن باشیم
+  return sock;
 }
