@@ -1,6 +1,7 @@
 import express from "express";
 import next from "next";
 import dotenv from "dotenv";
+import { createSession } from "./bot.js";
 
 dotenv.config();
 
@@ -12,52 +13,49 @@ const PORT = process.env.PORT || 3000;
 const server = express();
 server.use(express.json());
 
-server.get("/health", (req, res) => res.send("OK"));
+// 🚀 مسیر اختصاصی برای دریافت کد (اینجا اتصال هیچ‌وقت قطع نمیشه)
+server.post("/api/pairing", async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+        if (!phoneNumber || !/^\d{10,15}$/.test(phoneNumber)) {
+            return res.status(400).json({ success: false, error: "شماره نامعتبر است." });
+        }
 
-// 🚀 1. باز کردن پورت به محض بالا آمدن سرور
-server.listen(PORT, () => {
-    console.log(`🚀 Web server listening on port ${PORT}`);
+        console.log(`[Express] Creating session for ${phoneNumber}...`);
+        const sock = await createSession(phoneNumber);
+
+        if (sock.authState.creds.registered) {
+            return res.json({ success: false, error: "این شماره قبلاً متصل شده است." });
+        }
+
+        // صبر میکنیم سوکت به واتساپ وصل بشه (بدون تایم اوت)
+        let code = null;
+        let attempts = 0;
+        while (!code && attempts < 100) { // حداکثر 10 ثانیه
+            try {
+                code = await sock.requestPairingCode(phoneNumber);
+            } catch (e) {
+                await new Promise(r => setTimeout(r, 100));
+                attempts++;
+            }
+        }
+
+        if (!code) throw new Error("واتساپ پاسخ نداد.");
+        
+        console.log(`[Express] Code generated: ${code}`);
+        return res.json({ success: true, code });
+
+    } catch (error) {
+        console.error("[Express] Error:", error.message);
+        return res.status(500).json({ success: false, error: error.message });
+    }
 });
 
-// 2. اجرای Next.js و ربات در پس‌زمینه
-nextApp.prepare().then(async () => {
-    console.log("✅ Next.js prepared successfully");
-    
-    server.all("*", (req, res) => handle(req, res));
+server.get("/health", (req, res) => res.send("OK"));
 
-    try {
-        const { createSession } = await import("./bot.js");
-        console.log("✅ Bot module loaded");
-        
-        if (process.env.MONGO_URI) {
-            console.log("🔍 Connecting to MongoDB...");
-            const { MongoClient } = await import("mongodb");
-            const client = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 });
-            await client.connect();
-            console.log("✅ Connected to MongoDB!");
-            
-            const collection = client.db("raees_bot").collection("sessions");
-            const users = await collection.distinct("_id");
-            const phoneNumbers = new Set();
-            
-            users.forEach(id => {
-                if (id.endsWith("_creds")) {
-                    phoneNumbers.add(id.replace("_creds", ""));
-                }
-            });
+// بقیه درخواست‌ها به Next.js
+server.all("*", (req, res) => handle(req, res));
 
-            console.log(`🔍 Found ${phoneNumbers.size} sessions in database.`);
-            
-            for (const phone of phoneNumbers) {
-                console.log(`🔄 Restoring session from DB for: ${phone}`);
-                await createSession(phone);
-            }
-        } else {
-            console.log("⚠️ MONGO_URI is missing!");
-        }
-    } catch (err) {
-        console.error("❌ Bot/Database startup error:", err.message);
-    }
-}).catch((err) => {
-    console.error("❌ Next.js prepare error:", err.message);
+server.listen(PORT, () => {
+    console.log(`🚀 Web server listening on port ${PORT}`);
 });
