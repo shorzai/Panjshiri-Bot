@@ -1,7 +1,7 @@
 import express from "express";
 import next from "next";
 import dotenv from "dotenv";
-import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
 import Pino from "pino";
 import fs from "fs";
 
@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 10000;
 const server = express();
 server.use(express.json());
 
-// مسیر گرفتن کد (دقیقاً مثل ترموکس)
+// مسیر گرفتن کد (دقیقاً مثل ترموکس، اما بدون تاخیر)
 server.post("/api/pairing", async (req, res) => {
     try {
         const { phoneNumber } = req.body;
@@ -27,33 +27,52 @@ server.post("/api/pairing", async (req, res) => {
         if (fs.existsSync(sessionDir)) fs.rmSync(sessionDir, { recursive: true, force: true });
 
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-        const { version } = await fetchLatestBaileysVersion();
 
+        // 🚀 استفاده از برچسب مرورگر استاندارد برای جلوگیری از رد شدن توسط واتساپ
         const sock = makeWASocket({
             auth: state,
-            version,
             logger: Pino({ level: "silent" }),
-            browser: ["Ubuntu", "Chrome", "120.0.0"],
-            printQRInTerminal: false
+            printQRInTerminal: false,
+            browser: ["Ubuntu", "Chrome", "120.0.0"] // برچسب استاندارد
         });
 
         sock.ev.on("creds.update", saveCreds);
 
-        // ⏳ صبر می‌کنیم (مثل وقتی که کاربر داره شماره رو تایپ می‌کنه)
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // 🚀 منتظر سیگنال آماده شدن واتساپ (qr) می‌مانیم و بلافاصله کد را می‌گیریم
+        let code = null;
+        const pairingPromise = new Promise((resolve, reject) => {
+            sock.ev.on("connection.update", async (update) => {
+                const { qr, connection } = update;
+                if (qr) {
+                    try {
+                        console.log(`[API] QR received, requesting code for ${phoneNumber}...`);
+                        code = await sock.requestPairingCode(phoneNumber);
+                        resolve();
+                    } catch (err) {
+                        reject(err);
+                    }
+                }
+                if (connection === "close") {
+                    reject(new Error("Connection closed before pairing."));
+                }
+            });
+        });
 
-        // حالا کد رو می‌گیریم
-        const code = await sock.requestPairingCode(phoneNumber);
-        
+        // حداکثر 15 ثانیه منتظر می‌مانیم
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("زمان دریافت کد به پایان رسید.")), 15000)
+        );
+
+        await Promise.race([pairingPromise, timeoutPromise]);
+
         if (!code) throw new Error("کد دریافت نشد.");
-        
-        console.log(`✅ Code generated: ${code}`);
+
         try { sock.end(undefined); } catch(e) {}
-        
+
         return res.json({ success: true, code });
 
     } catch (error) {
-        console.error("❌ Pairing Error:", error.message);
+        console.error("[API] Pairing error:", error.message);
         return res.status(500).json({ success: false, error: error.message });
     }
 });
