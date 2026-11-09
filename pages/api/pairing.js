@@ -1,4 +1,6 @@
-import { createSession } from "../../bot.js";
+import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
+import Pino from "pino";
+import fs from "fs";
 
 export default async function handler(req, res) {
     if (req.method !== "POST") {
@@ -12,22 +14,28 @@ export default async function handler(req, res) {
             return res.status(400).json({ success: false, error: "شماره نامعتبر است." });
         }
 
-        const sock = await createSession(phoneNumber);
-        
-        if (sock.authState.creds.registered) {
-            return res.json({ success: false, error: "این شماره قبلاً متصل شده است." });
+        // استفاده از یک پوشه موقت برای گرفتن کد (بدون دیتابیس)
+        const tempDir = `./temp_session_${phoneNumber}`;
+        const { state, saveCreds } = await useMultiFileAuthState(tempDir);
+
+        const sock = makeWASocket({
+            auth: state,
+            logger: Pino({ level: "silent" }),
+            printQRInTerminal: false,
+            browser: ["Ubuntu", "Chrome", "120.0.0"],
+            mobile: phoneNumber
+        });
+
+        sock.ev.on("creds.update", saveCreds);
+
+        // درخواست کد بلافاصله
+        const code = await sock.requestPairingCode(phoneNumber);
+
+        if (!code) {
+            throw new Error("کد دریافت نشد.");
         }
 
-        // 🚀 حلقه بی‌نهایت: تا وقتی کد نده، دست برنمی‌داره (بدون تایم‌اوت)
-        let code = null;
-        while (!code) {
-            try {
-                code = await sock.requestPairingCode(phoneNumber);
-            } catch (e) {
-                await new Promise(r => setTimeout(r, 100)); // هر 100 میلی‌ثانیه یه بار امتحان میکنه
-            }
-        }
-
+        console.log(`[API] Code generated instantly: ${code}`);
         return res.json({ success: true, code });
 
     } catch (error) {

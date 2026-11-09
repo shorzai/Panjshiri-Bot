@@ -5,7 +5,7 @@
   "main": "server.js",
   "type": "module",
   "engines": {
-    "node": ">=20.0.0 <25.0.0"
+    "node": "20.x"
   },
   "scripts": {
     "dev": "node server.js",
@@ -14,34 +14,37 @@
     "termux": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "6.7.21",
     "@hapi/boom": "^10.0.1",
+    "@totallynotdavid/downloader": "*",
+    "@whiskeysockets/baileys": "6.7.21",
     "chalk": "^5.3.0",
-    "pino": "^8.17.2",
-    "fs-extra": "^11.2.0",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "face-api.js": "^0.22.2",
+    "fluent-ffmpeg": "^2.1.2",
+    "fs-extra": "^11.2.0",
+    "google-tts-api": "^2.0.2",
+    "jimp": "0.22.12",
+    "mathjs": "^12.4.1",
+    "mongodb": "^6.5.0",
     "next": "14.2.35",
+    "next-pwa": "^5.6.0",
+    "pdfkit": "^0.15.0",
+    "pino": "^8.17.2",
+    "qrcode": "^1.5.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "mongodb": "^6.5.0",
-    "dotenv": "^16.4.5",
-    "qrcode": "^1.5.3",
-    "mathjs": "^12.4.1",
-    "next-pwa": "^5.6.0",
-    "jimp": "0.22.12",
-    "google-tts-api": "^2.0.2",
-    "pdfkit": "^0.15.0",
-    "cheerio": "^1.0.0",
-    "tsun-dls": "*",
-    "face-api.js": "^0.22.2",
-    "@totallynotdavid/downloader": "*",
     "rss-parser": "^3.13.0",
-    "spottydl": "^0.2.7",
     "sharp": "^0.32.6",
-    "fluent-ffmpeg": "^2.1.2"
+    "spottydl": "^0.2.7",
+    "tsun-dls": "*"
   },
   "overrides": {
     "jimp": "0.22.12",
     "jimp-compact": "0.22.12"
+  },
+  "comments": {
+    "why-overrides": "baileys می‌خواد jimp@^1.6.0 اما پروژه با 0.22.12 کار می‌کند. overrides تعارض را در npm و Render حل می‌کند."
   }
 }
