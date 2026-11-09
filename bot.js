@@ -1,6 +1,5 @@
 import makeWASocket, {
   DisconnectReason,
-  fetchLatestBaileysVersion,
   initAuthCreds,
   BufferJSON,
   proto
@@ -20,14 +19,22 @@ import capsuleRunner from "./lib/capsule.js";
 import spy from "./lib/spy.js";
 
 export const activeSessions = new Map();
+let cachedMongoClient = null;
 
-async function useMongoAuthState(phoneNumber) {
+// تابع اتصال به مونگو با تایم اوت (تا اگر قطع بود، سریع ارور بده)
+async function getMongoCollection(phoneNumber) {
   const mongoUri = process.env.MONGO_URI;
   if (!mongoUri) throw new Error("MONGO_URI is missing in .env");
 
-  const client = new MongoClient(mongoUri);
-  await client.connect();
-  const collection = client.db("raees_bot").collection("sessions");
+  if (!cachedMongoClient) {
+    cachedMongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 5000 });
+    await cachedMongoClient.connect();
+  }
+  return cachedMongoClient.db("raees_bot").collection("sessions");
+}
+
+async function useMongoAuthState(phoneNumber) {
+  const collection = await getMongoCollection(phoneNumber);
 
   const writeData = async (data, key) => {
     await collection.updateOne(
@@ -88,19 +95,16 @@ export async function createSession(phoneNumber) {
   }
 
   const { state, saveCreds } = await useMongoAuthState(phoneNumber);
-  const { version } = await fetchLatestBaileysVersion();
-
+  
+  // 🚨 حذف fetchLatestBaileysVersion برای جلوگیری از هنگ کردن روی رندر
   const sock = makeWASocket({
     auth: state,
-    version,
     logger: Pino({ level: "silent" }),
     browser: ["Ubuntu", "Chrome", "120.0.0"],
     printQRInTerminal: false
   });
 
-  // ذخیره سوکت در حافظه بلافاصله
   activeSessions.set(phoneNumber, sock);
-
   sock.ev.on("creds.update", saveCreds);
 
   try {
@@ -156,6 +160,5 @@ export async function createSession(phoneNumber) {
     }
   });
 
-  // 👈 سوکت رو بلافاصله برمی‌گردونیم بدون اینکه منتظر open شدن باشیم
   return sock;
 }

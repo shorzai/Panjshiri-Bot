@@ -1,6 +1,6 @@
 import { createSession } from "../../bot.js";
 
-export const maxDuration = 60; 
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export default async function handler(req, res) {
@@ -18,7 +18,9 @@ export default async function handler(req, res) {
             });
         }
 
+        console.log(`⏳ 1. Creating session for ${phoneNumber}...`);
         const sock = await createSession(phoneNumber);
+        console.log(`✅ 2. Session created.`);
 
         if (sock.authState.creds.registered) {
             return res.json({
@@ -27,31 +29,21 @@ export default async function handler(req, res) {
             });
         }
 
-        let code = null;
-        let attempts = 0;
-        const maxAttempts = 15;
-
-        while (!code && attempts < maxAttempts) {
-            try {
-                code = await sock.requestPairingCode(phoneNumber);
-            } catch (e) {
-                await new Promise(r => setTimeout(r, 1000));
-                attempts++;
-            }
-        }
+        console.log(`⏳ 3. Requesting pairing code...`);
+        const code = await sock.requestPairingCode(phoneNumber);
+        console.log(`✅ 4. Code received: ${code}`);
 
         if (!code) {
-            throw new Error("واتساپ پاسخ نداد. لطفاً چند لحظه دیگر دوباره تلاش کنید.");
+            throw new Error("کد دریافت نشد. لطفاً دوباره تلاش کنید.");
         }
 
-        console.log(`🔑 Pairing code for ${phoneNumber}: ${code}`);
         return res.json({ success: true, code });
 
     } catch (error) {
-        console.error("Pairing error:", error);
+        console.error("❌ Pairing error:", error);
         return res.status(500).json({
             success: false,
-            error: error.message || "خطا در تولید کد. لطفاً دوباره تلاش کنید."
+            error: error.message || "خطا در تولید کد."
         });
     }
 }
