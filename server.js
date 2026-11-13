@@ -21,9 +21,6 @@ const PORT = Number(process.env.PORT) || 10000;
 const server = express();
 server.use(express.json({ limit: "1mb" }));
 
-// ======================================
-// MONGODB SETUP
-// ======================================
 let mongoClientPromise = null;
 let collection = null;
 
@@ -84,11 +81,7 @@ async function useMongoAuthState(phoneNumber) {
     return { state, saveCreds };
 }
 
-// ======================================
-// SOCKET & HANDLER SETUP
-// ======================================
 const activeSockets = new Map();
-const reconnectTimers = new Map();
 let baileysVersionPromise = null;
 
 async function getBaileysVersion() {
@@ -103,7 +96,6 @@ async function getBaileysVersion() {
 const logger = Pino({ level: "silent" });
 
 async function startSocket(phoneNumber, onPairCode = null) {
-    // Kill existing socket if any to avoid conflicts
     if (activeSockets.has(phoneNumber)) {
         try { activeSockets.get(phoneNumber).end(undefined); } catch(e) {}
         activeSockets.delete(phoneNumber);
@@ -125,13 +117,10 @@ async function startSocket(phoneNumber, onPairCode = null) {
 
     activeSockets.set(phoneNumber, sock);
 
-    let saveQueue = Promise.resolve();
-    sock.ev.on("creds.update", () => {
-        saveQueue = saveQueue.then(() => saveCreds()).catch(error => console.error("Mongo save error:", error.message));
-    });
+    sock.ev.on("creds.update", saveCreds);
 
     let pairingRequested = false;
-    let handlerAttached = false;
+    let handler = null;
 
     sock.ev.on("connection.update", async (update) => {
         const { connection, qr, lastDisconnect } = update;
@@ -140,146 +129,98 @@ async function startSocket(phoneNumber, onPairCode = null) {
             pairingRequested = true;
             try {
                 console.log(`[Socket] QR received, generating code...`);
-                const code = await sock.requestPairingCode(phoneNumber);
+                const code = await Promise.race([
+                    sock.requestPairingCode(phoneNumber),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 15000))
+                ]);
                 if (typeof onPairCode === "function") onPairCode(code);
             } catch (error) {
-                console.error(`[Socket] Pairing error:`, error.message);
+                console.error(`❌ Socket pairing error:`, error.message);
                 if (typeof onPairCode === "function") onPairCode(null, error);
             }
         }
 
         if (connection === "open") {
             console.log(`✅ WhatsApp connected: ${phoneNumber}`);
-            const timer = reconnectTimers.get(phoneNumber);
-            if (timer) { clearTimeout(timer); reconnectTimers.delete(phoneNumber); }
-
-            if (!handlerAttached) {
-                handlerAttached = true;
+            
+            // 🚨 لود کردن هندلر دقیقاً بعد از وصل شدن
+            if (!handler) {
                 try {
                     console.log(`⏳ Loading handler.js...`);
-                    const { default: handler } = await import("./handler.js");
+                    const module = await import("./handler.js");
+                    handler = module.default;
                     console.log(`✅ Handler.js loaded successfully!`);
-                    
-                    sock.ev.on("messages.upsert", async ({ messages, type }) => {
-                        if (type !== "notify") return;
-
-                        for (const m of messages || []) {
-                            // Ignore messages sent by the bot itself
-                            if (!m?.message || !m?.key?.remoteJid || m.key.fromMe) continue;
-
-                            try {
-                                const msg = m.message;
-                                const body = msg.conversation || msg.extendedTextMessage?.text || msg.imageMessage?.caption || msg.videoMessage?.caption || msg.documentMessage?.caption || "";
-                                
-                                if (!body) continue;
-                                
-                                console.log(`📩 Received: "${body}" from ${m.key.remoteJid}`);
-                                
-                                if (body.trim() === "!ping" || body.trim() === ".ping") {
-                                    await sock.sendMessage(m.key.remoteJid, { text: "🏓 Pong! (Direct Server Test)" }, { quoted: m });
-                                    console.log(`✅ Sent direct test reply!`);
-                                }
-
-                                if (handler) {
-                                    await handler(sock, m.key.remoteJid, body, m);
-                                }
-                                
-                            } catch (error) {
-                                console.error("❌ MSG ERROR:", error.message);
-                            }
-                        }
-                    });
-
                 } catch (error) {
-                    console.error("❌ CRITICAL: Handler loading error:", error.message);
-                    handlerAttached = false;
+                    console.error(`❌ CRITICAL: Handler.js crashed during load. The error is:`);
+                    console.error(error); // چاپ کامل خطا برای پیدا کردن فایل خراب
                 }
             }
         }
 
         if (connection === "close") {
-            await saveQueue;
-            if (activeSockets.get(phoneNumber) !== sock) return;
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             console.log(`🔴 Disconnected: ${phoneNumber}`, statusCode || "Unknown");
             activeSockets.delete(phoneNumber);
-
-            if (statusCode === DisconnectReason.loggedOut) return;
-            
-            if (!reconnectTimers.has(phoneNumber)) {
-                const timer = setTimeout(async () => {
-                    reconnectTimers.delete(phoneNumber);
-                    try { await startSocket(phoneNumber); } catch (e) {}
-                }, 2500);
-                reconnectTimers.set(phoneNumber, timer);
+            if (statusCode !== DisconnectReason.loggedOut) {
+                setTimeout(() => startSocket(phoneNumber), 2500);
             }
+        }
+    });
+
+    // 🚨 رویداد پیام‌ها
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+        if (type !== "notify") return;
+        const m = messages[0];
+        if (!m || !m.message || m.key.fromMe) return;
+
+        const body = m.message.conversation || m.message.extendedTextMessage?.text || "";
+        console.log(`📩 [MESSAGE] From: ${m.key.remoteJid} | Body: "${body}"`);
+
+        if (handler) {
+            try {
+                await handler(sock, m.key.remoteJid, body, m);
+            } catch (err) {
+                console.error("❌ Error in handler execution:", err.message);
+            }
+        } else {
+            console.log("⚠️ Message received but handler is NOT LOADED.");
         }
     });
 
     return sock;
 }
 
-// ======================================
-// PAIRING API
-// ======================================
-const pendingPairings = new Map();
-
 server.post("/api/pairing", async (req, res) => {
     const phoneNumber = String(req.body?.phoneNumber || "").replace(/\D/g, "");
     if (!/^\d{10,15}$/.test(phoneNumber)) return res.status(400).json({ success: false, error: "شماره نامعتبر است." });
-    if (pendingPairings.has(phoneNumber)) return res.status(409).json({ success: false, error: "در حال اجرا است." });
-
-    pendingPairings.set(phoneNumber, true);
-    let responseSent = false;
-    let timeout;
 
     try {
-        // 🚨 پاک کردن سشن‌های قبلی از دیتابیس تا واتساپ مجبور بشه کد جدید بده
         const db = await getCollection();
         await db.deleteMany({ _id: { $regex: new RegExp(`^${phoneNumber}_`) } });
-        console.log(`[API] Cleared old sessions for ${phoneNumber}`);
 
-        // پاک کردن سوکت‌های در حافظه
-        if (activeSockets.has(phoneNumber)) {
-            try { activeSockets.get(phoneNumber).end(undefined); } catch(e) {}
-            activeSockets.delete(phoneNumber);
-        }
-
-        const codePromise = new Promise((resolve, reject) => {
-            timeout = setTimeout(() => reject(new Error("واتساپ پاسخ نداد. لطفا دوباره تلاش کنید.")), 60000);
-            startSocket(phoneNumber, (code, error) => {
-                if (responseSent) return;
-                if (error) reject(error);
-                if (code) resolve(code);
+        const code = await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error("Timeout")), 60000);
+            startSocket(phoneNumber, (c, err) => {
+                clearTimeout(timeout);
+                if (err) reject(err);
+                if (c) resolve(c);
             }).catch(reject);
         });
 
-        const code = await codePromise;
-        clearTimeout(timeout);
-        responseSent = true;
         return res.json({ success: true, code });
     } catch (error) {
-        if (timeout) clearTimeout(timeout);
         return res.status(500).json({ success: false, error: error.message });
-    } finally {
-        pendingPairings.delete(phoneNumber);
     }
 });
 
 server.get("/health", async (req, res) => {
-    try {
-        const db = await getCollection();
-        await db.database.command({ ping: 1 });
-        return res.json({ success: true, mongodb: "connected", activeSessions: activeSockets.size });
-    } catch (error) {
-        return res.status(503).json({ success: false, mongodb: "disconnected", error: error.message });
-    }
+    return res.json({ success: true, activeSessions: activeSockets.size });
 });
 
 async function startServer() {
     await nextApp.prepare();
     server.all("*", (req, res) => handle(req, res));
-    server.listen(PORT, "0.0.0.0", async () => {
+    server.listen(PORT, "0.0.0.0", () => {
         console.log(`🚀 Server listening on port ${PORT}`);
     });
 }
