@@ -218,13 +218,14 @@ async function processMessage(sock, message) {
         const body = getMessageText(message);
         if (!body) return;
 
+        // 🚨 لاگ برای دیدن دستورات
+        log(`📩 RECEIVED: "${body}" from ${from}`);
+
         if (typeof messageHandler !== "function") {
-            log("Message handler is not ready.");
+            log("⚠️ Message handler is NOT LOADED. Check logs above for error.");
             return;
         }
 
-        // 🚨 لاگ برای دیدن دستورات
-        log(`📩 RECEIVED: "${body}" from ${from}`);
         await messageHandler(sock, from, body, message);
 
     } catch (error) {
@@ -307,18 +308,18 @@ async function startSocket(sessionId) {
             }
         });
 
-        // =====================================
-        // 🚨 اصلاح اصلی اینجاست: منتظر سیگنال واتساپ می‌مانیم
-        // =====================================
         sock.ev.on("connection.update", async update => {
             const { connection, qr, lastDisconnect } = update;
 
-            // به محض دریافت سیگنال QR، کد را می‌گیریم
             if (qr && !state.creds.registered && !sock.__pairingCodeSent) {
                 const waiter = pairingWaiters.get(sessionId);
                 if (waiter) {
                     try {
                         log(`WhatsApp signal received, generating code for ${sessionId}...`);
+                        
+                        // 🚀 تاخیر 2 ثانیه‌ای برای اطمینان از آماده بودن سوکت
+                        await new Promise(r => setTimeout(r, 2000));
+                        
                         const code = await sock.requestPairingCode(sessionId);
                         sock.__pairingCodeSent = true;
 
@@ -327,6 +328,7 @@ async function startSocket(sessionId) {
                         waiter.resolve(code);
                         log(`Pairing code generated: ${sessionId}`);
                     } catch (error) {
+                        log(`Pairing failed: ${error.message}`);
                         clearTimeout(waiter.timeout);
                         pairingWaiters.delete(sessionId);
                         waiter.reject(error);
@@ -434,6 +436,7 @@ app.post("/api/pairing", async (req, res) => {
 
     try {
         const codePromise = new Promise((resolve, reject) => {
+            // 🚀 افزایش زمان انتظار به 90 ثانیه
             const timeout = setTimeout(() => {
                 pairingWaiters.delete(phoneNumber);
                 const sock = activeSockets.get(phoneNumber);
@@ -443,7 +446,7 @@ app.post("/api/pairing", async (req, res) => {
                     try { sock.end(undefined); } catch {}
                 }
                 reject(new Error("زمان دریافت کد تمام شد. دوباره تلاش کنید."));
-            }, 45000);
+            }, 90000);
 
             pairingWaiters.set(phoneNumber, { resolve, reject, timeout });
         });
