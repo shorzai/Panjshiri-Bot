@@ -72,13 +72,25 @@ async function connectMongo() {
 
 async function loadMessageHandler() {
     const handlerPath = path.resolve("./handler.js");
-    if (!fs.existsSync(handlerPath)) throw new Error("فایل handler.js پیدا نشد.");
-    const imported = await import(`${handlerPath}?update=${Date.now()}`);
-    if (typeof imported.default !== "function") throw new Error("handler.js باید یک تابع default export داشته باشد.");
-    messageHandler = imported.default;
-    handlerReady = true;
-    handlerStatus = "ready";
-    log("Message handler loaded successfully.");
+    if (!fs.existsSync(handlerPath)) {
+        log("❌ CRITICAL: handler.js NOT FOUND!");
+        return;
+    }
+    try {
+        const imported = await import(`${handlerPath}?update=${Date.now()}`);
+        if (typeof imported.default !== "function") {
+            log("❌ CRITICAL: handler.js does not export a default function!");
+            return;
+        }
+        messageHandler = imported.default;
+        handlerReady = true;
+        handlerStatus = "ready";
+        log("✅ Message handler loaded successfully.");
+    } catch (error) {
+        handlerReady = false;
+        handlerStatus = "error";
+        console.error("❌ CRITICAL: Error loading handler.js:\n", error.stack);
+    }
 }
 
 function serialize(value) { return JSON.stringify(value, BufferJSON.replacer); }
@@ -131,6 +143,9 @@ function getMessageText(message) {
     return (content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption || content.videoMessage?.caption || content.documentMessage?.caption || content.buttonsResponseMessage?.selectedButtonId || content.listResponseMessage?.singleSelectReply?.selectedRowId || content.templateButtonReplyMessage?.selectedId || "");
 }
 
+// =====================================
+// 🚨 اینجا پیام‌ها بررسی و به هندلر پاس داده می‌شوند
+// =====================================
 async function processMessage(sock, message) {
     try {
         if (!message?.message || message.key?.fromMe) return;
@@ -138,11 +153,32 @@ async function processMessage(sock, message) {
         if (!from) return;
         const body = getMessageText(message);
         if (!body) return;
-        if (typeof messageHandler !== "function") { log("Message handler is not ready."); return; }
+        
         log(`📩 RECEIVED: "${body}" from ${from}`);
-        await messageHandler(sock, from, body, message);
+
+        // 🚨 1. تست مستقیم (بدون هندلر)
+        if (body.trim() === "!ping" || body.trim() === ".ping") {
+            await sock.sendMessage(from, { text: "🏓 Pong! (Direct Test)" }, { quoted: message });
+            log(`✅ Replied to !ping directly.`);
+        }
+
+        // 🚨 2. ارسال به هندلر اصلی
+        if (typeof messageHandler !== "function") { 
+            log("❌ Message handler is NOT LOADED. (Check logs above)"); 
+            return; 
+        }
+
+        // استخراج آرگومان‌ها (مثل ربات اصلی خودت)
+        const args = body.trim().split(/ +/).slice(1);
+
+        try {
+            await messageHandler(sock, from, body, message, args);
+        } catch (handlerExecError) {
+            console.error("❌ ERROR EXECUTING HANDLER:\n", handlerExecError.stack);
+        }
+
     } catch (error) {
-        console.error("Message processing error:", error);
+        console.error("❌ Message processing error:\n", error.stack);
     }
 }
 
@@ -188,6 +224,7 @@ async function startSocket(sessionId) {
         activeSockets.set(sessionId, sock);
 
         sock.ev.on("creds.update", async () => { try { await saveCreds(); } catch (error) { console.error("Save credentials error:", error); } });
+        
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
             if (type !== "notify" && type !== "append") return;
             for (const message of messages || []) { await processMessage(sock, message); }
@@ -207,10 +244,6 @@ async function startSocket(sessionId) {
                         pairingWaiters.delete(sessionId);
                         waiter.resolve(code);
                         log(`Pairing code generated: ${sessionId}. WAITING FOR USER...`);
-                        
-                        // 🚨 نکته مهم: اینجا هیچ تایمری برای قطع کردن سوکت وجود ندارد!
-                        // سوکت باز می‌ماند تا کاربر با آرامش کد را وارد کند.
-                        
                     } catch (error) {
                         clearTimeout(waiter.timeout);
                         pairingWaiters.delete(sessionId);
@@ -270,9 +303,6 @@ app.get("/health", (req, res) => {
     res.status(200).json({ status: "online", mongo: mongoStatus, next: nextStatus, handler: handlerStatus, mongoReady, nextReady, handlerReady, connectedSessions: activeSockets.size });
 });
 
-// =====================================
-// 🚨 اصلاح اصلی اینجاست: حذف تایمرهای قطع‌کننده سوکت
-// =====================================
 app.post("/api/pairing", async (req, res) => {
     const phoneNumber = String(req.body?.phoneNumber || "").replace(/\D/g, "");
     if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) return res.status(400).json({ success: false, message: "شماره واتساپ را همراه کود کشور وارد کنید." });
@@ -293,13 +323,10 @@ app.post("/api/pairing", async (req, res) => {
 
     try {
         const codePromise = new Promise((resolve, reject) => {
-            // تایمر فقط برای این است که اگر واتساپ تا ۶۰ ثانیه جواب نداد، سایت ارور بده
-            // این تایمر سوکت را نمی‌بندد و فقط به سایت پیام می‌دهد
             const timeout = setTimeout(() => {
                 pairingWaiters.delete(phoneNumber);
                 reject(new Error("زمان دریافت کد تمام شد. دوباره تلاش کنید."));
             }, 60000);
-            
             pairingWaiters.set(phoneNumber, { resolve, reject, timeout });
         });
         
