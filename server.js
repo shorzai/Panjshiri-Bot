@@ -17,10 +17,6 @@ import makeWASocket, {
 
 dotenv.config();
 
-// =====================================
-// CONFIGURATION
-// =====================================
-
 const PORT = Number(process.env.PORT || 3000);
 const HOST = "0.0.0.0";
 const DB_NAME = process.env.MONGODB_DB || process.env.MONGO_DB || "raees_sultan_bot";
@@ -42,10 +38,6 @@ const dev = process.env.NODE_ENV !== "production";
 const nextApp = next({ dev });
 const nextHandler = nextApp.getRequestHandler();
 
-// =====================================
-// GLOBAL STATE
-// =====================================
-
 let mongoClient = null;
 let authCollection = null;
 let messageHandler = null;
@@ -63,15 +55,7 @@ const reconnectTimers = new Map();
 const reconnectAttempts = new Map();
 const pairingWaiters = new Map();
 
-// =====================================
-// LOGGER
-// =====================================
-
 function log(...args) { console.log("[RAEES SULTAN BOT]", ...args); }
-
-// =====================================
-// MONGODB CONNECTION
-// =====================================
 
 async function connectMongo() {
     if (!MONGODB_URI) { mongoStatus = "missing_uri"; throw new Error("MongoDB URI پیدا نشد."); }
@@ -86,33 +70,19 @@ async function connectMongo() {
     log("MongoDB connected successfully.");
 }
 
-// =====================================
-// LOAD MESSAGE HANDLER
-// =====================================
-
 async function loadMessageHandler() {
     const handlerPath = path.resolve("./handler.js");
     if (!fs.existsSync(handlerPath)) throw new Error("فایل handler.js پیدا نشد.");
-
     const imported = await import(`${handlerPath}?update=${Date.now()}`);
     if (typeof imported.default !== "function") throw new Error("handler.js باید یک تابع default export داشته باشد.");
-
     messageHandler = imported.default;
     handlerReady = true;
     handlerStatus = "ready";
     log("Message handler loaded successfully.");
 }
 
-// =====================================
-// AUTH DATA SERIALIZATION
-// =====================================
-
 function serialize(value) { return JSON.stringify(value, BufferJSON.replacer); }
 function deserialize(value) { return JSON.parse(value, BufferJSON.reviver); }
-
-// =====================================
-// MONGODB AUTH STATE
-// =====================================
 
 async function useMongoAuthState(sessionId) {
     if (!authCollection || !mongoReady) throw new Error("MongoDB هنوز آماده نیست.");
@@ -154,20 +124,12 @@ async function useMongoAuthState(sessionId) {
     return { state, saveCreds: () => writeData("creds", state.creds) };
 }
 
-// =====================================
-// MESSAGE TEXT EXTRACTION
-// =====================================
-
 function getMessageText(message) {
     if (!message?.message) return "";
     const content = message.message.ephemeralMessage?.message || message.message.viewOnceMessage?.message || message.message.viewOnceMessageV2?.message || message.message.documentWithCaptionMessage?.message || message.message;
     if (!content) return "";
     return (content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption || content.videoMessage?.caption || content.documentMessage?.caption || content.buttonsResponseMessage?.selectedButtonId || content.listResponseMessage?.singleSelectReply?.selectedRowId || content.templateButtonReplyMessage?.selectedId || "");
 }
-
-// =====================================
-// PROCESS WHATSAPP MESSAGE
-// =====================================
 
 async function processMessage(sock, message) {
     try {
@@ -183,10 +145,6 @@ async function processMessage(sock, message) {
         console.error("Message processing error:", error);
     }
 }
-
-// =====================================
-// RECONNECT MANAGEMENT
-// =====================================
 
 function clearReconnectTimer(sessionId) { const timer = reconnectTimers.get(sessionId); if (timer) { clearTimeout(timer); reconnectTimers.delete(sessionId); } }
 
@@ -206,10 +164,6 @@ function scheduleReconnect(sessionId, oldSocket = null) {
     reconnectTimers.set(sessionId, timer);
 }
 
-// =====================================
-// START WHATSAPP SOCKET
-// =====================================
-
 async function startSocket(sessionId) {
     if (activeSockets.has(sessionId)) return activeSockets.get(sessionId);
     if (startingSockets.has(sessionId)) return startingSockets.get(sessionId);
@@ -219,9 +173,10 @@ async function startSocket(sessionId) {
         clearReconnectTimer(sessionId);
         const { state, saveCreds } = await useMongoAuthState(sessionId);
         const { version } = await fetchLatestBaileysVersion();
+        
         const sock = makeWASocket({
             version, logger, auth: state, printQRInTerminal: false,
-            browser: ["RAEES SULTAN BOT", "Chrome", "1.0.0"],
+            browser: ["Ubuntu", "Chrome", "120.0.0"],
             markOnlineOnConnect: true, syncFullHistory: false,
             generateHighQualityLinkPreview: true, connectTimeoutMs: 60000,
             defaultQueryTimeoutMs: 60000, keepAliveIntervalMs: 25000
@@ -240,6 +195,7 @@ async function startSocket(sessionId) {
 
         sock.ev.on("connection.update", async update => {
             const { connection, qr, lastDisconnect } = update;
+            
             if (qr && !state.creds.registered && !sock.__pairingCodeSent) {
                 const waiter = pairingWaiters.get(sessionId);
                 if (waiter) {
@@ -250,7 +206,11 @@ async function startSocket(sessionId) {
                         clearTimeout(waiter.timeout);
                         pairingWaiters.delete(sessionId);
                         waiter.resolve(code);
-                        log(`Pairing code generated: ${sessionId}`);
+                        log(`Pairing code generated: ${sessionId}. WAITING FOR USER...`);
+                        
+                        // 🚨 نکته مهم: اینجا هیچ تایمری برای قطع کردن سوکت وجود ندارد!
+                        // سوکت باز می‌ماند تا کاربر با آرامش کد را وارد کند.
+                        
                     } catch (error) {
                         clearTimeout(waiter.timeout);
                         pairingWaiters.delete(sessionId);
@@ -259,6 +219,7 @@ async function startSocket(sessionId) {
                 }
             }
             if (connection === "connecting") log(`Connecting WhatsApp: ${sessionId}`);
+            
             if (connection === "open") {
                 reconnectAttempts.delete(sessionId);
                 clearReconnectTimer(sessionId);
@@ -268,32 +229,30 @@ async function startSocket(sessionId) {
                     pairingWaiters.delete(sessionId);
                     waiter.resolve("CONNECTED");
                 }
-                log(`WhatsApp connected: ${sessionId}`);
+                log(`✅✅✅ WhatsApp CONNECTED successfully: ${sessionId}`);
             }
+            
             if (connection === "close") {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 log(`WhatsApp connection closed: ${sessionId}`, statusCode || "");
+                
                 const waiter = pairingWaiters.get(sessionId);
                 if (waiter) {
                     clearTimeout(waiter.timeout);
                     pairingWaiters.delete(sessionId);
-                    waiter.reject(new Error("اتصال واتساپ قطع شد. دوباره تلاش کنید."));
+                    waiter.reject(new Error("اتصال قطع شد. دوباره تلاش کنید."));
                 }
 
                 if (statusCode === DisconnectReason.loggedOut) {
                     activeSockets.delete(sessionId);
                     reconnectAttempts.delete(sessionId);
                     log("WhatsApp logged out. Pairing required again.");
-
                     try {
                         if (authCollection) {
                             await authCollection.deleteMany({ sessionId });
                             log(`Deleted session data from MongoDB for ${sessionId} due to logout.`);
                         }
-                    } catch (dbErr) {
-                        console.error("Failed to delete session from MongoDB:", dbErr);
-                    }
-
+                    } catch (dbErr) { console.error("Failed to delete session from MongoDB:", dbErr); }
                     return;
                 }
 
@@ -307,33 +266,13 @@ async function startSocket(sessionId) {
     try { return await startPromise; } finally { startingSockets.delete(sessionId); }
 }
 
-// =====================================
-// HEALTH CHECK
-// =====================================
-
 app.get("/health", (req, res) => {
-    res.status(200).json({
-        status: "online", mongo: mongoStatus, next: nextStatus, handler: handlerStatus,
-        mongoReady, nextReady, handlerReady, initializationError, connectedSessions: activeSockets.size
-    });
+    res.status(200).json({ status: "online", mongo: mongoStatus, next: nextStatus, handler: handlerStatus, mongoReady, nextReady, handlerReady, connectedSessions: activeSockets.size });
 });
 
 // =====================================
-// SESSION STATUS
+// 🚨 اصلاح اصلی اینجاست: حذف تایمرهای قطع‌کننده سوکت
 // =====================================
-
-app.get("/api/status", (req, res) => {
-    const sessions = [];
-    for (const [sessionId, sock] of activeSockets.entries()) {
-        sessions.push({ sessionId, connected: Boolean(sock.user), number: sock.user?.id || null });
-    }
-    res.json({ success: true, sessions });
-});
-
-// =====================================
-// PAIRING API
-// =====================================
-
 app.post("/api/pairing", async (req, res) => {
     const phoneNumber = String(req.body?.phoneNumber || "").replace(/\D/g, "");
     if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) return res.status(400).json({ success: false, message: "شماره واتساپ را همراه کود کشور وارد کنید." });
@@ -354,18 +293,19 @@ app.post("/api/pairing", async (req, res) => {
 
     try {
         const codePromise = new Promise((resolve, reject) => {
+            // تایمر فقط برای این است که اگر واتساپ تا ۶۰ ثانیه جواب نداد، سایت ارور بده
+            // این تایمر سوکت را نمی‌بندد و فقط به سایت پیام می‌دهد
             const timeout = setTimeout(() => {
                 pairingWaiters.delete(phoneNumber);
-                const sock = activeSockets.get(phoneNumber);
-                if (sock) { sock.__noReconnect = true; activeSockets.delete(phoneNumber); try { sock.end(undefined); } catch {} }
                 reject(new Error("زمان دریافت کد تمام شد. دوباره تلاش کنید."));
-            }, 45000);
+            }, 60000);
+            
             pairingWaiters.set(phoneNumber, { resolve, reject, timeout });
         });
+        
         await startSocket(phoneNumber);
         const pairingCode = await codePromise;
         
-        // 🚨 اصلاح شد: pairingCode به code تغییر کرد تا سایت بتونه بخونتش
         return res.json({ success: true, phoneNumber, code: pairingCode, message: "کد جفت‌سازی آماده است." });
     } catch (error) {
         const waiter = pairingWaiters.get(phoneNumber);
@@ -374,81 +314,24 @@ app.post("/api/pairing", async (req, res) => {
     }
 });
 
-// =====================================
-// NEXT.JS FALLBACK
-// =====================================
-
 app.use((req, res) => {
-    if (!nextReady) return res.status(503).send("RAEES SULTAN BOT website is starting. Please try again shortly.");
+    if (!nextReady) return res.status(503).send("Starting...");
     return nextHandler(req, res);
 });
 
-// =====================================
-// 🚨 اضافه شد: بازیابی سشن‌ها بعد از ری‌استارت
-// =====================================
-async function restoreSessions() {
-    if (!mongoReady || !authCollection) return;
-    try {
-        log("Restoring saved sessions from MongoDB...");
-        const sessions = await authCollection.distinct("sessionId");
-        for (const sessionId of sessions) {
-            if (!activeSockets.has(sessionId)) {
-                log(`Auto-restoring session for: ${sessionId}`);
-                await startSocket(sessionId).catch(e => console.error(`Failed to restore ${sessionId}:`, e));
-            }
-        }
-    } catch (err) {
-        console.error("Restore sessions error:", err);
-    }
-}
-
-// =====================================
-// INITIALIZE SERVICES
-// =====================================
-
 async function initializeServices() {
     log("Initializing services...");
-    const nextTask = (async () => {
-        try { await nextApp.prepare(); nextReady = true; nextStatus = "ready"; log("Next.js is ready."); }
-        catch (error) { nextReady = false; nextStatus = "error"; console.error("Next.js initialization error:", error); }
-    })();
-    const handlerTask = (async () => {
-        try { await loadMessageHandler(); }
-        catch (error) { handlerReady = false; handlerStatus = "error"; console.error("Handler initialization error:", error); }
-    })();
-    const mongoTask = (async () => {
-        try { 
-            await connectMongo(); 
-            await restoreSessions(); // 🚨 اینجا سشن‌ها رو وصل میکنه
-        }
-        catch (error) { mongoReady = false; if (mongoStatus !== "missing_uri") mongoStatus = "error"; initializationError = error.message; console.error("MongoDB initialization error:", error); }
-    })();
+    const nextTask = (async () => { try { await nextApp.prepare(); nextReady = true; nextStatus = "ready"; log("Next.js is ready."); } catch (e) { console.error(e); } })();
+    const handlerTask = (async () => { try { await loadMessageHandler(); } catch (e) { handlerStatus = "error"; console.error(e); } })();
+    const mongoTask = (async () => { try { await connectMongo(); } catch (e) { initializationError = e.message; console.error(e); } })();
     await Promise.allSettled([nextTask, handlerTask, mongoTask]);
     log("Initialization tasks completed.");
-    log(`Status: MongoDB=${mongoStatus}, Next=${nextStatus}, Handler=${handlerStatus}`);
 }
 
 server.listen(PORT, HOST, () => {
     log(`Server listening on ${HOST}:${PORT}`);
-    log("Owner: Shirzai Panjshiri");
-    initializeServices().catch(error => console.error("Initialization failure:", error));
+    initializeServices().catch(error => console.error(error));
 });
 
 process.on("unhandledRejection", error => console.error("Unhandled Rejection:", error));
 process.on("uncaughtException", error => console.error("Uncaught Exception:", error));
-
-async function shutdown() {
-    log("Shutting down...");
-    for (const timer of reconnectTimers.values()) clearTimeout(timer);
-    reconnectTimers.clear();
-    for (const waiter of pairingWaiters.values()) { clearTimeout(waiter.timeout); waiter.reject(new Error("Server is shutting down.")); }
-    pairingWaiters.clear();
-    for (const sock of activeSockets.values()) { try { sock.__noReconnect = true; sock.end(undefined); } catch {} }
-    activeSockets.clear();
-    try { await mongoClient?.close(); } catch (error) {}
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 5000);
-}
-
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
