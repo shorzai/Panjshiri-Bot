@@ -13,7 +13,6 @@ const commands = new Map();
 const showderFile = "./data/showder.json";
 let lastMessages = new Map();
 
-// 💤 اضافه شده: ذخیره کاربران AFK در حافظه ربات
 global.afkUsers = global.afkUsers || new Map();
 
 const badWords = [
@@ -24,137 +23,78 @@ const badWords = [
 
 function canLearn(text) {
     const t = text.toLowerCase();
-
-    if (t.includes("http") || t.includes("www.")) {
-        return false;
-    }
-
-    if (t.length < 3) {
-        return false;
-    }
-
-    if (t.length > 500) {
-        return false;
-    }
-
+    if (t.includes("http") || t.includes("www.")) return false;
+    if (t.length < 3) return false;
+    if (t.length > 500) return false;
     for (const word of badWords) {
-        if (t.includes(word)) {
-            return false;
-        }
+        if (t.includes(word)) return false;
     }
-
     return true;
 }
-
-// =======================
-// SHOWDER MEMORY
-// =======================
 
 function loadShowder() {
     if (!fs.existsSync(showderFile)) {
         fs.mkdirSync("./data", { recursive: true });
-
-        fs.writeFileSync(
-            showderFile,
-            JSON.stringify({
-                private: {},
-                group: {}
-            }, null, 2)
-        );
+        fs.writeFileSync(showderFile, JSON.stringify({ private: {}, group: {} }, null, 2));
     }
-
-    return JSON.parse(
-        fs.readFileSync(showderFile, "utf8")
-    );
+    return JSON.parse(fs.readFileSync(showderFile, "utf8"));
 }
 
 function saveShowder(data) {
-    fs.writeFileSync(
-        showderFile,
-        JSON.stringify(data, null, 2)
-    );
+    fs.writeFileSync(showderFile, JSON.stringify(data, null, 2));
 }
 
-// پاکسازی متن
-
 function cleanText(text) {
-    return text
-        .toLowerCase()
-        .replace(/[؟?!.,،]/g, "")
-        .trim();
+    return text.toLowerCase().replace(/[؟?!.,،]/g, "").trim();
 }
 
 // =======================
 // LOAD COMMANDS SAFE
 // =======================
 
-const files = fs.readdirSync("./commands")
-    .filter(file => file.endsWith(".js"));
+const files = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
+
+console.log(`🚀 [HANDLER] Found ${files.length} command files. Starting to load...`);
 
 for (const file of files) {
     try {
+        // 🚨 این لاگ دقیقاً میگه کدوم فایل داره لود میشه
+        console.log(`⏳ [HANDLER] Loading file: ${file}`);
+        
         const cmd = await import(`./commands/${file}`);
 
         if (cmd.default) {
-            commands.set(
-                file.replace(".js", "").toLowerCase(),
-                cmd.default
-            );
+            commands.set(file.replace(".js", "").toLowerCase(), cmd.default);
         }
 
     } catch (e) {
-        console.log(
-            "LOAD ERROR:",
-            file,
-            e.message
-        );
+        console.log("LOAD ERROR:", file, e.message);
     }
 }
+
+console.log(`✅ [HANDLER] All ${files.length} command files loaded successfully!`);
 
 // =======================
 // HANDLER
 // =======================
 
-export default async function handler(
-    sock,
-    from,
-    body,
-    m
-) {
+export default async function handler(sock, from, body, m) {
     try {
-
         if (!body) return;
-
         body = body.trim();
 
-        // ================================
-        // 🕸️ شبکه اجتماعی — اول ثبت کن
-        // ================================
+        try { trackSocial(from, m); } catch (e) {}
 
-        try {
-            trackSocial(from, m);
-        } catch (e) {
-            console.log("SOCIAL TRACK ERROR:", e.message);
-        }
-
-        // ================================
-        // 💤 سیستم AFK (اضافه شده به هندلر)
-        // ================================
         try {
             const senderJid = m.key.participant || m.key.remoteJid;
-
-            // اگر خود کاربر پیام داد (و دستور !afk نبود)، از حالت AFK خارج شود
             if (global.afkUsers.has(senderJid) && !body.startsWith("!afk")) {
                 global.afkUsers.delete(senderJid);
                 await sock.sendMessage(from, { text: "👋 خوش برگشتی! وضعیت AFK شما حذف شد." }, { quoted: m });
             }
-
-            // چک کردن اینکه آیا کسی که منشن شده یا بهش ریپلای شده AFK است
             const contextInfo = m.message?.extendedTextMessage?.contextInfo || m.message?.imageMessage?.contextInfo || m.message?.videoMessage?.contextInfo;
             const mentioned = contextInfo?.mentionedJid || [];
             const repliedTo = contextInfo?.participant ? [contextInfo.participant] : [];
             const toCheck = [...mentioned, ...repliedTo];
-
             for (const jid of toCheck) {
                 if (global.afkUsers.has(jid) && jid !== senderJid) {
                     await sock.sendMessage(from, { 
@@ -163,309 +103,91 @@ export default async function handler(
                     }, { quoted: m });
                 }
             }
-        } catch (e) {
-            console.log("AFK HANDLER ERROR:", e.message);
-        }
+        } catch (e) {}
 
-        // ================================
-        // 🛡️ محافظت‌ها (به ترتیب)
-        // ================================
-
-        // آنتی لینک
-        try {
-            if (await checkAntilink(sock, from, body, m)) return;
-        } catch (e) {
-            console.log("ANTILINK HANDLER ERROR:", e.message);
-        }
-
-        // کلمات ممنوعه
-        try {
-            if (await checkBadWord(sock, from, body, m)) return;
-        } catch (e) {
-            console.log("BADWORD HANDLER ERROR:", e.message);
-        }
-
-        // ضد ریپلای
-        try {
-            if (await checkAntiReply(sock, from, body, m)) return;
-        } catch (e) {
-            console.log("ANTIREPLY HANDLER ERROR:", e.message);
-        }
-
-        // 🚨 ردیاب کلمات
-        try {
-            await checkWatch(sock, from, body, m);
-        } catch (e) {
-            console.log("WATCH HANDLER ERROR:", e.message);
-        }
-
-        // =======================
-        // 🎲 RPG GAME
-        // =======================
+        try { if (await checkAntilink(sock, from, body, m)) return; } catch (e) {}
+        try { if (await checkBadWord(sock, from, body, m)) return; } catch (e) {}
+        try { if (await checkAntiReply(sock, from, body, m)) return; } catch (e) {}
+        try { await checkWatch(sock, from, body, m); } catch (e) {}
 
         try {
-            const isRPG = await handleRPGInput(
-                sock,
-                from,
-                body,
-                m
-            );
-
+            const isRPG = await handleRPGInput(sock, from, body, m);
             if (isRPG) return;
+        } catch (e) {}
 
-        } catch (e) {
-            console.log("RPG ERROR:", e.message);
-        }
-
-        // =======================
-        // SHOWDER AUTO LEARN
-        // =======================
-
-        if (
-            !body.startsWith("!") &&
-            !m.key.fromMe
-        ) {
-
+        if (!body.startsWith("!") && !m.key.fromMe) {
             const memory = loadShowder();
-
-            const type = from.includes("@g.us")
-                ? "group"
-                : "private";
-
-            if (!memory[type]) {
-                memory[type] = {};
-            }
-
+            const type = from.includes("@g.us") ? "group" : "private";
+            if (!memory[type]) memory[type] = {};
             const text = cleanText(body);
 
-            // =======================
-            // SHOWDER ANSWER SCORE
-            // =======================
-
-            if (
-                memory._status !== false &&
-                memory[type][text]
-            ) {
-
+            if (memory._status !== false && memory[type][text]) {
                 let answers = memory[type][text];
-
                 if (!Array.isArray(answers)) {
-                    answers = [
-                        {
-                            text: answers,
-                            score: 1
-                        }
-                    ];
-
+                    answers = [{ text: answers, score: 1 }];
                     memory[type][text] = answers;
                 }
-
-                answers.sort(
-                    (a, b) => b.score - a.score
-                );
-
+                answers.sort((a, b) => b.score - a.score);
                 let answer = answers[0];
-
                 answer.score++;
-
                 saveShowder(memory);
-
-                await sock.sendMessage(
-                    from,
-                    {
-                        text: answer.text
-                    },
-                    {
-                        quoted: m
-                    }
-                );
-
+                await sock.sendMessage(from, { text: answer.text }, { quoted: m });
                 return;
             }
 
-            // =======================
-            // LEARN
-            // =======================
-
-            if (
-                memory._status !== false &&
-                canLearn(body)
-            ) {
-
+            if (memory._status !== false && canLearn(body)) {
                 const old = lastMessages.get(from);
-
                 if (old && old !== text) {
-
                     if (!memory[type][old]) {
-
-                        memory[type][old] = [
-                            {
-                                text: body,
-                                score: 1
-                            }
-                        ];
-
+                        memory[type][old] = [{ text: body, score: 1 }];
                     } else {
-
-                        let exists = memory[type][old].find(
-                            x => x.text === body
-                        );
-
-                        if (!exists) {
-                            memory[type][old].push({
-                                text: body,
-                                score: 1
-                            });
-                        }
+                        let exists = memory[type][old].find(x => x.text === body);
+                        if (!exists) memory[type][old].push({ text: body, score: 1 });
                     }
-
                     saveShowder(memory);
                 }
-
-                lastMessages.set(
-                    from,
-                    text
-                );
+                lastMessages.set(from, text);
             }
 
-            // =======================
-            // SMART
-            // =======================
-
-            try {
-                await smart(
-                    sock,
-                    from,
-                    body,
-                    m
-                );
-
-            } catch (e) {
-                console.log(
-                    "SMART ERROR:",
-                    e.message
-                );
-            }
-
+            try { await smart(sock, from, body, m); } catch (e) {}
             return;
         }
 
-        // =======================
-        // COMMAND PARSE
-        // =======================
-
         let commandText = body.trim();
-
-        // پشتیبانی از !play و !playآهنگ
         if (/^!play/i.test(commandText)) {
             const query = commandText.slice(5).trim();
-
-            commandText = query
-                ? `!play ${query}`
-                : "!play";
+            commandText = query ? `!play ${query}` : "!play";
         }
 
-        const match = commandText.match(
-            /^!(\S+)(?:\s+(.*))?$/s
-        );
-
+        const match = commandText.match(/^!(\S+)(?:\s+(.*))?$/s);
         if (!match) return;
 
         const command = match[1].toLowerCase();
-
-        const args = match[2]
-            ? match[2].trim().split(/\s+/)
-            : [];
-
+        const args = match[2] ? match[2].trim().split(/\s+/) : [];
         const cmd = commands.get(command);
 
         if (cmd) {
-
-            try {
-                await cmd(
-                    sock,
-                    from,
-                    commandText,
-                    m,
-                    args
-                );
-
-            } catch (e) {
-                console.log(
-                    "COMMAND ERROR:",
-                    command,
-                    e
-                );
-            }
-
+            try { await cmd(sock, from, commandText, m, args); } catch (e) {}
             return;
         }
 
-        // =======================
-        // SPECIAL COMMANDS
-        // =======================
-
         switch (command) {
-
             case "pgr": {
                 const subCmd = args[0];
-
-                if (subCmd === "crash") {
-                    await crashCmd(
-                        sock,
-                        from,
-                        body,
-                        m,
-                        args
-                    );
-
-                } else if (subCmd === "stop") {
-                    await stopCrash(
-                        sock,
-                        from,
-                        body,
-                        m,
-                        args
-                    );
-
-                } else {
-                    await sock.sendMessage(
-                        from,
-                        {
-                            text: "دستور نامعتبر. مثال: !pgr crash <شماره> یا !pgr stop"
-                        },
-                        {
-                            quoted: m
-                        }
-                    );
-                }
-
+                if (subCmd === "crash") await crashCmd(sock, from, body, m, args);
+                else if (subCmd === "stop") await stopCrash(sock, from, body, m, args);
+                else await sock.sendMessage(from, { text: "دستور نامعتبر." }, { quoted: m });
                 break;
             }
-
             case "ping":
-                await sock.sendMessage(
-                    from,
-                    {
-                        text: "pong 🏓"
-                    }
-                );
+                await sock.sendMessage(from, { text: "pong 🏓" });
                 break;
-
             case "owner":
-                await sock.sendMessage(
-                    from,
-                    {
-                        text: "👑 OWNER: SULTAN SHIRZAI"
-                    }
-                );
+                await sock.sendMessage(from, { text: "👑 OWNER: SULTAN SHIRZAI" });
                 break;
-
-            // 💤 اضافه شده: دستور AFK
             case "afk": {
                 const sender = m.key.participant || m.key.remoteJid;
                 const reason = args.join(' ') || 'بدون دلیل';
-
                 if (global.afkUsers.has(sender)) {
                     global.afkUsers.delete(sender);
                     await sock.sendMessage(from, { text: "👋 وضعیت AFK شما حذف شد." }, { quoted: m });
@@ -478,9 +200,6 @@ export default async function handler(
         }
 
     } catch (e) {
-        console.log(
-            "HANDLER ERROR:",
-            e
-        );
+        console.log("HANDLER ERROR:", e);
     }
 }
