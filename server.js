@@ -29,6 +29,7 @@ const MONGODB_URI = [
     process.env.DATABASE_URL
 ].find(value => typeof value === "string" && value.trim());
 
+// 🚨 خاموش کردن لاگ‌های مزاحم Baileys
 const logger = Pino({ level: "silent" });
 const app = express();
 const server = http.createServer(app);
@@ -85,7 +86,7 @@ async function loadMessageHandler() {
         messageHandler = imported.default;
         handlerReady = true;
         handlerStatus = "ready";
-        log("✅ Message handler loaded successfully.");
+        log("✅ Handler loaded successfully.");
     } catch (error) {
         handlerReady = false;
         handlerStatus = "error";
@@ -143,9 +144,6 @@ function getMessageText(message) {
     return (content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption || content.videoMessage?.caption || content.documentMessage?.caption || content.buttonsResponseMessage?.selectedButtonId || content.listResponseMessage?.singleSelectReply?.selectedRowId || content.templateButtonReplyMessage?.selectedId || "");
 }
 
-// =====================================
-// 🚨 اینجا پیام‌ها بررسی و به هندلر پاس داده می‌شوند
-// =====================================
 async function processMessage(sock, message) {
     try {
         if (!message?.message || message.key?.fromMe) return;
@@ -156,29 +154,24 @@ async function processMessage(sock, message) {
         
         log(`📩 RECEIVED: "${body}" from ${from}`);
 
-        // 🚨 1. تست مستقیم (بدون هندلر)
         if (body.trim() === "!ping" || body.trim() === ".ping") {
             await sock.sendMessage(from, { text: "🏓 Pong! (Direct Test)" }, { quoted: message });
             log(`✅ Replied to !ping directly.`);
         }
 
-        // 🚨 2. ارسال به هندلر اصلی
-        if (typeof messageHandler !== "function") { 
-            log("❌ Message handler is NOT LOADED. (Check logs above)"); 
-            return; 
+        if (typeof messageHandler === "function") {
+            // 🚨 صدا زدن هندلر با ۴ ورودی دقیقاً مثل کد اصلی خودت
+            try {
+                await messageHandler(sock, from, body, message);
+            } catch (execError) {
+                console.error("❌ ERROR INSIDE HANDLER.JS:", execError.message);
+                console.error(execError.stack);
+            }
+        } else {
+            log("❌ Message handler is NOT LOADED.");
         }
-
-        // استخراج آرگومان‌ها (مثل ربات اصلی خودت)
-        const args = body.trim().split(/ +/).slice(1);
-
-        try {
-            await messageHandler(sock, from, body, message, args);
-        } catch (handlerExecError) {
-            console.error("❌ ERROR EXECUTING HANDLER:\n", handlerExecError.stack);
-        }
-
     } catch (error) {
-        console.error("❌ Message processing error:\n", error.stack);
+        console.error("❌ MSG ERROR:", error);
     }
 }
 
