@@ -29,7 +29,6 @@ const MONGODB_URI = [
     process.env.DATABASE_URL
 ].find(value => typeof value === "string" && value.trim());
 
-// 🚨 خاموش کردن لاگ‌های مزاحم Baileys
 const logger = Pino({ level: "silent" });
 const app = express();
 const server = http.createServer(app);
@@ -160,12 +159,10 @@ async function processMessage(sock, message) {
         }
 
         if (typeof messageHandler === "function") {
-            // 🚨 صدا زدن هندلر با ۴ ورودی دقیقاً مثل کد اصلی خودت
             try {
                 await messageHandler(sock, from, body, message);
             } catch (execError) {
                 console.error("❌ ERROR INSIDE HANDLER.JS:", execError.message);
-                console.error(execError.stack);
             }
         } else {
             log("❌ Message handler is NOT LOADED.");
@@ -294,6 +291,23 @@ async function startSocket(sessionId) {
 
 app.get("/health", (req, res) => {
     res.status(200).json({ status: "online", mongo: mongoStatus, next: nextStatus, handler: handlerStatus, mongoReady, nextReady, handlerReady, connectedSessions: activeSockets.size });
+});
+
+// =====================================
+// 🚨 آدرس جدید برای پیدا کردن فایل خراب
+// =====================================
+app.get("/api/test-handler", async (req, res) => {
+    try {
+        const handlerPath = path.resolve("./handler.js");
+        const imported = await import(`${handlerPath}?update=${Date.now()}`);
+        res.json({ success: true, message: "Handler loaded perfectly!", hasDefault: typeof imported.default === "function" });
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message,
+            stack: error.stack 
+        });
+    }
 });
 
 app.post("/api/pairing", async (req, res) => {
