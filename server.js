@@ -6,6 +6,7 @@ import path from "path";
 import fs from "fs";
 import Pino from "pino";
 import { MongoClient } from "mongodb";
+import { notifyOwner } from "./lib/notify.js";
 
 import makeWASocket, {
     fetchLatestBaileysVersion,
@@ -145,7 +146,9 @@ function getMessageText(message) {
 
 async function processMessage(sock, message) {
     try {
-        if (!message?.message || message.key?.fromMe) return;
+        // 🚨 اینجا اصلاح شد: پیام‌های خودت (fromMe) دیگه نادیده گرفته نمیشن تا هندلر بتونه دستورات رو اجرا کنه
+        if (!message?.message) return;
+        
         const from = message.key?.remoteJid;
         if (!from) return;
         const body = getMessageText(message);
@@ -253,6 +256,13 @@ async function startSocket(sessionId) {
                     waiter.resolve("CONNECTED");
                 }
                 log(`✅✅✅ WhatsApp CONNECTED successfully: ${sessionId}`);
+                
+                try {
+                    await notifyOwner(sock);
+                    log("✅ notifyOwner message sent to owner.");
+                } catch (notifyErr) {
+                    console.error("❌ notifyOwner failed:", notifyErr.message);
+                }
             }
             
             if (connection === "close") {
@@ -291,23 +301,6 @@ async function startSocket(sessionId) {
 
 app.get("/health", (req, res) => {
     res.status(200).json({ status: "online", mongo: mongoStatus, next: nextStatus, handler: handlerStatus, mongoReady, nextReady, handlerReady, connectedSessions: activeSockets.size });
-});
-
-// =====================================
-// 🚨 آدرس جدید برای پیدا کردن فایل خراب
-// =====================================
-app.get("/api/test-handler", async (req, res) => {
-    try {
-        const handlerPath = path.resolve("./handler.js");
-        const imported = await import(`${handlerPath}?update=${Date.now()}`);
-        res.json({ success: true, message: "Handler loaded perfectly!", hasDefault: typeof imported.default === "function" });
-    } catch (error) {
-        res.status(500).json({ 
-            success: false, 
-            error: error.message,
-            stack: error.stack 
-        });
-    }
 });
 
 app.post("/api/pairing", async (req, res) => {
