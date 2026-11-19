@@ -71,18 +71,29 @@ async function connectMongo() {
     log("MongoDB connected successfully.");
 }
 
+// 🚨 اضافه شده: بازیابی خودکار سشن‌ها
+async function restoreSessions() {
+    if (!mongoReady || !authCollection) return;
+    try {
+        log("Restoring saved sessions from MongoDB...");
+        const sessions = await authCollection.distinct("sessionId");
+        for (const sessionId of sessions) {
+            if (!activeSockets.has(sessionId)) {
+                log(`Auto-restoring session for: ${sessionId}`);
+                await startSocket(sessionId).catch(e => console.error(`Failed to restore ${sessionId}:`, e.message));
+            }
+        }
+    } catch (err) {
+        console.error("Restore sessions error:", err);
+    }
+}
+
 async function loadMessageHandler() {
     const handlerPath = path.resolve("./handler.js");
-    if (!fs.existsSync(handlerPath)) {
-        log("❌ CRITICAL: handler.js NOT FOUND!");
-        return;
-    }
+    if (!fs.existsSync(handlerPath)) { log("❌ handler.js NOT FOUND!"); return; }
     try {
         const imported = await import(`${handlerPath}?update=${Date.now()}`);
-        if (typeof imported.default !== "function") {
-            log("❌ CRITICAL: handler.js does not export a default function!");
-            return;
-        }
+        if (typeof imported.default !== "function") { log("❌ handler.js invalid format!"); return; }
         messageHandler = imported.default;
         handlerReady = true;
         handlerStatus = "ready";
@@ -90,7 +101,7 @@ async function loadMessageHandler() {
     } catch (error) {
         handlerReady = false;
         handlerStatus = "error";
-        console.error("❌ CRITICAL: Error loading handler.js:\n", error.stack);
+        console.error("❌ Error loading handler.js:\n", error.message);
     }
 }
 
@@ -146,9 +157,7 @@ function getMessageText(message) {
 
 async function processMessage(sock, message) {
     try {
-        // 🚨 اینجا اصلاح شد: پیام‌های خودت (fromMe) دیگه نادیده گرفته نمیشن تا هندلر بتونه دستورات رو اجرا کنه
         if (!message?.message) return;
-        
         const from = message.key?.remoteJid;
         if (!from) return;
         const body = getMessageText(message);
@@ -165,7 +174,7 @@ async function processMessage(sock, message) {
             try {
                 await messageHandler(sock, from, body, message);
             } catch (execError) {
-                console.error("❌ ERROR INSIDE HANDLER.JS:", execError.message);
+                console.error("❌ ERROR INSIDE HANDLER:", execError.message);
             }
         } else {
             log("❌ Message handler is NOT LOADED.");
@@ -259,7 +268,7 @@ async function startSocket(sessionId) {
                 
                 try {
                     await notifyOwner(sock);
-                    log("✅ notifyOwner message sent to owner.");
+                    log("✅ notifyOwner message sent.");
                 } catch (notifyErr) {
                     console.error("❌ notifyOwner failed:", notifyErr.message);
                 }
@@ -279,13 +288,13 @@ async function startSocket(sessionId) {
                 if (statusCode === DisconnectReason.loggedOut) {
                     activeSockets.delete(sessionId);
                     reconnectAttempts.delete(sessionId);
-                    log("WhatsApp logged out. Pairing required again.");
+                    log("WhatsApp logged out. Deleting session from DB.");
                     try {
                         if (authCollection) {
                             await authCollection.deleteMany({ sessionId });
-                            log(`Deleted session data from MongoDB for ${sessionId} due to logout.`);
+                            log(`Deleted session data from MongoDB for ${sessionId}.`);
                         }
-                    } catch (dbErr) { console.error("Failed to delete session from MongoDB:", dbErr); }
+                    } catch (dbErr) { console.error("Failed to delete session:", dbErr); }
                     return;
                 }
 
@@ -299,13 +308,14 @@ async function startSocket(sessionId) {
     try { return await startPromise; } finally { startingSockets.delete(sessionId); }
 }
 
+// 🚨 اضافه شده: مسیر Health Check برای جلوگیری از خواب سرور
 app.get("/health", (req, res) => {
     res.status(200).json({ status: "online", mongo: mongoStatus, next: nextStatus, handler: handlerStatus, mongoReady, nextReady, handlerReady, connectedSessions: activeSockets.size });
 });
 
 app.post("/api/pairing", async (req, res) => {
     const phoneNumber = String(req.body?.phoneNumber || "").replace(/\D/g, "");
-    if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) return res.status(400).json({ success: false, message: "شماره واتساپ را همراه کود کشور وارد کنید." });
+    if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) return res.status(400).json({ success: false, message: "شماره نامعتبر است." });
     if (!mongoReady) return res.status(503).json({ success: false, message: "MongoDB آماده نیست.", mongo: mongoStatus });
 
     try {
@@ -319,13 +329,13 @@ app.post("/api/pairing", async (req, res) => {
         try { activeSockets.get(phoneNumber).__noReconnect = true; activeSockets.get(phoneNumber).end(undefined); } catch(e) {}
         activeSockets.delete(phoneNumber);
     }
-    if (pairingWaiters.has(phoneNumber)) return res.status(409).json({ success: false, message: "درخواست کد برای این شماره در حال اجرا است." });
+    if (pairingWaiters.has(phoneNumber)) return res.status(409).json({ success: false, message: "در حال اجرا است." });
 
     try {
         const codePromise = new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 pairingWaiters.delete(phoneNumber);
-                reject(new Error("زمان دریافت کد تمام شد. دوباره تلاش کنید."));
+                reject(new Error("زمان دریافت کد تمام شد."));
             }, 60000);
             pairingWaiters.set(phoneNumber, { resolve, reject, timeout });
         });
@@ -333,11 +343,11 @@ app.post("/api/pairing", async (req, res) => {
         await startSocket(phoneNumber);
         const pairingCode = await codePromise;
         
-        return res.json({ success: true, phoneNumber, code: pairingCode, message: "کد جفت‌سازی آماده است." });
+        return res.json({ success: true, phoneNumber, code: pairingCode, message: "کد آماده است." });
     } catch (error) {
         const waiter = pairingWaiters.get(phoneNumber);
         if (waiter) { clearTimeout(waiter.timeout); pairingWaiters.delete(phoneNumber); }
-        return res.status(500).json({ success: false, message: error.message || "خطا در دریافت کد جفت‌سازی" });
+        return res.status(500).json({ success: false, message: error.message });
     }
 });
 
@@ -350,7 +360,18 @@ async function initializeServices() {
     log("Initializing services...");
     const nextTask = (async () => { try { await nextApp.prepare(); nextReady = true; nextStatus = "ready"; log("Next.js is ready."); } catch (e) { console.error(e); } })();
     const handlerTask = (async () => { try { await loadMessageHandler(); } catch (e) { handlerStatus = "error"; console.error(e); } })();
-    const mongoTask = (async () => { try { await connectMongo(); } catch (e) { initializationError = e.message; console.error(e); } })();
+    
+    // 🚨 اینجا بعد از اتصال به مونگو، سشن‌های قبلی رو وصل میکنیم
+    const mongoTask = (async () => { 
+        try { 
+            await connectMongo(); 
+            await restoreSessions();
+        } catch (e) { 
+            initializationError = e.message; 
+            console.error(e); 
+        } 
+    })();
+    
     await Promise.allSettled([nextTask, handlerTask, mongoTask]);
     log("Initialization tasks completed.");
 }
@@ -359,6 +380,15 @@ server.listen(PORT, HOST, () => {
     log(`Server listening on ${HOST}:${PORT}`);
     initializeServices().catch(error => console.error(error));
 });
+
+// 🚨 یک پینگ داخلی هر ۱۴ دقیقه یکبار برای بیدار نگه داشتن سرور
+setInterval(async () => {
+    try {
+        const url = process.env.RENDER_EXTERNAL_URL || `http://127.0.0.1:${PORT}`;
+        await fetch(`${url}/health`);
+        log("Internal Keep-Alive ping sent.");
+    } catch (e) {}
+}, 14 * 60 * 1000);
 
 process.on("unhandledRejection", error => console.error("Unhandled Rejection:", error));
 process.on("uncaughtException", error => console.error("Uncaught Exception:", error));
