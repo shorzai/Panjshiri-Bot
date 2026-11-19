@@ -8,320 +8,103 @@ export default async function allmenu(sock, from, body, m, args) {
             commandsCount = fs.readdirSync("./commands").filter(f => f.endsWith(".js")).length;
         } catch {}
 
-        // 🖼️ ارسال عکس (مطمئن شو عکس با این اسم در پوشه sultan هست، وگرنه اسمش رو عوض کن)
-        const imagePath = "./sultan/allmenu.jpg"; // یا هر عکسی که برای منو داری
+        const imagePath = "./sultan/menu.jpg";
         if (fs.existsSync(imagePath)) {
             try {
                 await sock.sendMessage(from, {
                     image: fs.readFileSync(imagePath),
-                    caption: "📖 *RAEES SULTAN BOT - FULL COMMAND LIST*"
+                    caption: `👑 *RAEES SULTAN BOT*\n\n👤 کاربر: ${pushname}\n📦 دستورات: ${commandsCount}\n\n📚 لیست دستورات به صورت صفحات شناور برای شما ارسال می‌شود...`
                 }, { quoted: m });
             } catch (imageError) {
                 console.log("❌ MENU IMAGE ERROR:", imageError.message);
             }
         }
 
-        // 📝 ساخت متن منو با استایل ورق کتاب
-        const menuText = `
-╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮
-┃   👑 *R A E E S   S U L T A N* 👑   ┃
-┃      📖 *BOOK OF COMMANDS* 📖      ┃
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+        // هر بخش را در یک پیام جداگانه ارسال میکنیم تا شناور به نظر برسند
+        const sections = [
+            {
+                title: "AI COMMAND LIST",
+                total: 14,
+                commands: [".ai", ".ai-lite", ".aio", ".aivoice", ".smart", ".pgrai", ".gpt", ".chat", ".imagine", ".translate", ".detect", ".confess", ".charuma", ".faceosint"]
+            },
+            {
+                title: "DOWNLOAD COMMAND LIST",
+                total: 25,
+                commands: [".play", ".song", ".music", ".video", ".dl", ".download", ".ytdl", ".ytmp3", ".ytmp4", ".instagram", ".tiktok", ".spotify", ".facebook", ".twitter", ".pinterest", ".threads", ".terabox", ".apk", ".mediafire", ".wallpaper", ".pv", ".vv", ".vv2", ".readvo", ".reader"]
+            },
+            {
+                title: "SECURITY COMMAND LIST",
+                total: 17,
+                commands: [".antilink", ".antibad", ".badword", ".watch", ".anticall", ".antidelete", ".antidelete2", ".antiforeign", ".antiimage", ".antivideo", ".antiaudio", ".antibot", ".antireply", ".antispam", ".antiarab", ".antiemoji", ".antivirtex"]
+            },
+            {
+                title: "AUTO SYSTEM COMMAND LIST",
+                total: 11,
+                commands: [".autoclear", ".autolike", ".autoreact", ".autostatus", ".autosticker", ".autovv", ".autobio", ".autochat", ".autotyping", ".autorp", ".autostickergc"]
+            },
+            {
+                title: "GROUP COMMAND LIST",
+                total: 35,
+                commands: [".kick", ".kickall", ".add", ".addall", ".promote", ".demote", ".removeadmin", ".tagall", ".hidetag", ".ghosttag", ".listadmin", ".listonline", ".linkgc", ".gcinfo", ".group", ".getgroups", ".getname", ".getpp", ".getppall", ".welcome", ".goodbye", ".mute", ".unmute", ".open", ".close", ".pin", ".subject", ".desc", ".revoke", ".leave", ".join", ".online", ".afk", ".lock", ".unlock"]
+            },
+            {
+                title: "FUN & GAMES COMMAND LIST",
+                total: 26,
+                commands: [".rpg", ".economy", ".profile", ".level", ".rank", ".gamble", ".hunt", ".mafia", ".box", ".quote", ".roast", ".fact", ".love", ".dice", ".fun", ".news", ".random", ".social", ".socialnet", ".8ball", ".truth", ".dare", ".ship", ".simp", ".rate", ".character"]
+            },
+            {
+                title: "TOOLS COMMAND LIST",
+                total: 34,
+                commands: [".sticker", ".calc", ".qr", ".password", ".shorten", ".setname", ".bio", ".weather", ".check", ".device", ".whois", ".find", ".save", ".savecontact", ".echo", ".say", ".clear", ".delete", ".count", ".stats", ".reverse", ".color", ".emoji", ".fakechat", ".forward", ".tts", ".ssweb", ".hash", ".headers", ".dns", ".bin", ".ipinfo", ".gitip", ".pdf"]
+            },
+            {
+                title: "CRASH & VIRUS COMMAND LIST",
+                total: 20,
+                commands: [".crash", ".crash2", ".crash3", ".crash4", ".crashpro", ".advcrash", ".virus", ".virose", ".destroy", ".destroy2", ".war", ".war2", ".marshal", ".power", ".pgr", ".pgrwar", ".cam", ".capsule", ".nuke", ".spam"]
+            },
+            {
+                title: "SHADOW COMMAND LIST",
+                total: 9,
+                commands: [".shadow", ".shadowclear", ".shadowprofile", ".shadowwarn", ".topshadow", ".weeklyshadow", ".showder", ".showder1", ".showdermenu"]
+            },
+            {
+                title: "OWNER & GENERAL COMMAND LIST",
+                total: 17,
+                commands: [".owner", ".onwer", ".broadcast", ".block", ".unblock", ".otp", ".report", ".help", ".menu", ".ping", ".alive", ".runtime", ".uptime", ".info", ".myid", ".id", ".time"]
+            },
+            {
+                title: "HUBX STORE COMMAND LIST",
+                total: 4,
+                commands: [".hubx store", ".hubx balance", ".hubx orders", ".hubx buy"]
+            }
+        ];
 
-👤 *کاربر:* ${pushname}
-📦 *کل دستورات:* ${commandsCount}
-⚡ *وضعیت:* ONLINE 🟢
+        // 🚀 ارسال هر بخش در یک پیام جداگانه (شبیه به کارت شناور)
+        for (const section of sections) {
+            let text = `┌─────── ⬥ ${section.title}\n│\n`;
+            for (const cmd of section.commands) {
+                text += `│ ⬡ ${cmd}\n`;
+            }
+            text += `│\n│ TOTAL COMMANDS LIST : ${section.total}\n└───────`;
+            
+            await sock.sendMessage(from, { text });
+            // یک مکث کوتاه بین پیام‌ها تا اسپم نشود و کاربر بتواند بخواند
+            await new Promise(r => setTimeout(r, 800));
+        }
 
-📢 *کانال رسمی ما:*
-https://whatsapp.com/channel/0029VbDOqY8DOQIcTC1Epm2H
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 1: AI & SMART*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .ai
-⎪ ◇ .ai-lite
-⎪ ◇ .aio
-⎪ ◇ .aivoice
-⎪ ◇ .smart
-⎪ ◇ .pgrai
-⎪ ◇ .gpt
-⎪ ◇ .chat
-⎪ ◇ .imagine
-⎪ ◇ .translate
-⎪ ◇ .detect
-⎪ ◇ .confess
-⎪ ◇ .charuma
-⎪ ◇ .faceosint
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 14
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 2: DOWNLOAD*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .play
-⎪ ◇ .song
-⎪ ◇ .music
-⎪ ◇ .video
-⎪ ◇ .dl
-⎪ ◇ .download
-⎪ ◇ .ytdl
-⎪ ◇ .ytmp3
-⎪ ◇ .ytmp4
-⎪ ◇ .instagram
-⎪ ◇ .tiktok
-⎪ ◇ .spotify
-⎪ ◇ .facebook
-⎪ ◇ .twitter
-⎪ ◇ .pinterest
-⎪ ◇ .threads
-⎪ ◇ .terabox
-⎪ ◇ .apk
-⎪ ◇ .mediafire
-⎪ ◇ .wallpaper
-⎪ ◇ .pv
-⎪ ◇ .vv
-⎪ ◇ .vv2
-⎪ ◇ .readvo
-⎪ ◇ .reader
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 25
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 3: SECURITY*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .antilink
-⎪ ◇ .antibad
-⎪ ◇ .badword
-⎪ ◇ .watch
-⎪ ◇ .anticall
-⎪ ◇ .antidelete
-⎪ ◇ .antidelete2
-⎪ ◇ .antiforeign
-⎪ ◇ .antiimage
-⎪ ◇ .antivideo
-⎪ ◇ .antiaudio
-⎪ ◇ .antibot
-⎪ ◇ .antireply
-⎪ ◇ .antispam
-⎪ ◇ .antiarab
-⎪ ◇ .antiemoji
-⎪ ◇ .antivirtex
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 17
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 4: AUTO SYSTEM*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .autoclear
-⎪ ◇ .autolike
-⎪ ◇ .autoreact
-⎪ ◇ .autostatus
-⎪ ◇ .autosticker
-⎪ ◇ .autovv
-⎪ ◇ .autobio
-⎪ ◇ .autochat
-⎪ ◇ .autotyping
-⎪ ◇ .autorp
-⎪ ◇ .autostickergc
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 11
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 5: GROUP CONTROL*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .kick
-⎪ ◇ .kickall
-⎪ ◇ .add
-⎪ ◇ .addall
-⎪ ◇ .promote
-⎪ ◇ .demote
-⎪ ◇ .removeadmin
-⎪ ◇ .tagall
-⎪ ◇ .hidetag
-⎪ ◇ .ghosttag
-⎪ ◇ .listadmin
-⎪ ◇ .listonline
-⎪ ◇ .linkgc
-⎪ ◇ .gcinfo
-⎪ ◇ .group
-⎪ ◇ .getgroups
-⎪ ◇ .getname
-⎪ ◇ .getpp
-⎪ ◇ .getppall
-⎪ ◇ .welcome
-⎪ ◇ .goodbye
-⎪ ◇ .mute
-⎪ ◇ .unmute
-⎪ ◇ .open
-⎪ ◇ .close
-⎪ ◇ .pin
-⎪ ◇ .subject
-⎪ ◇ .desc
-⎪ ◇ .revoke
-⎪ ◇ .leave
-⎪ ◇ .join
-⎪ ◇ .online
-⎪ ◇ .afk
-⎪ ◇ .lock
-⎪ ◇ .unlock
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 35
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 6: FUN & GAMES*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .rpg
-⎪ ◇ .economy
-⎪ ◇ .profile
-⎪ ◇ .level
-⎪ ◇ .rank
-⎪ ◇ .gamble
-⎪ ◇ .hunt
-⎪ ◇ .mafia
-⎪ ◇ .box
-⎪ ◇ .quote
-⎪ ◇ .roast
-⎪ ◇ .fact
-⎪ ◇ .love
-⎪ ◇ .dice
-⎪ ◇ .fun
-⎪ ◇ .news
-⎪ ◇ .random
-⎪ ◇ .social
-⎪ ◇ .socialnet
-⎪ ◇ .8ball
-⎪ ◇ .truth
-⎪ ◇ .dare
-⎪ ◇ .ship
-⎪ ◇ .simp
-⎪ ◇ .rate
-⎪ ◇ .character
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 26
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 7: TOOLS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .sticker
-⎪ ◇ .calc
-⎪ ◇ .qr
-⎪ ◇ .password
-⎪ ◇ .shorten
-⎪ ◇ .setname
-⎪ ◇ .bio
-⎪ ◇ .weather
-⎪ ◇ .check
-⎪ ◇ .device
-⎪ ◇ .whois
-⎪ ◇ .find
-⎪ ◇ .save
-⎪ ◇ .savecontact
-⎪ ◇ .echo
-⎪ ◇ .say
-⎪ ◇ .clear
-⎪ ◇ .delete
-⎪ ◇ .count
-⎪ ◇ .stats
-⎪ ◇ .reverse
-⎪ ◇ .color
-⎪ ◇ .emoji
-⎪ ◇ .fakechat
-⎪ ◇ .forward
-⎪ ◇ .tts
-⎪ ◇ .ssweb
-⎪ ◇ .hash
-⎪ ◇ .headers
-⎪ ◇ .dns
-⎪ ◇ .bin
-⎪ ◇ .ipinfo
-⎪ ◇ .gitip
-⎪ ◇ .pdf
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 34
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 8: CRASH & VIRUS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .crash
-⎪ ◇ .crash2
-⎪ ◇ .crash3
-⎪ ◇ .crash4
-⎪ ◇ .crashpro
-⎪ ◇ .advcrash
-⎪ ◇ .virus
-⎪ ◇ .virose
-⎪ ◇ .destroy
-⎪ ◇ .destroy2
-⎪ ◇ .war
-⎪ ◇ .war2
-⎪ ◇ .marshal
-⎪ ◇ .power
-⎪ ◇ .pgr
-⎪ ◇ .pgrwar
-⎪ ◇ .cam
-⎪ ◇ .capsule
-⎪ ◇ .nuke
-⎪ ◇ .spam
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 20
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 9: SHADOW*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .shadow
-⎪ ◇ .shadowclear
-⎪ ◇ .shadowprofile
-⎪ ◇ .shadowwarn
-⎪ ◇ .topshadow
-⎪ ◇ .weeklyshadow
-⎪ ◇ .showder
-⎪ ◇ .showder1
-⎪ ◇ .showdermenu
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 9
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 10: OWNER & GENERAL*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .owner
-⎪ ◇ .onwer
-⎪ ◇ .broadcast
-⎪ ◇ .block
-⎪ ◇ .unblock
-⎪ ◇ .otp
-⎪ ◇ .report
-⎪ ◇ .help
-⎪ ◇ .menu
-⎪ ◇ .ping
-⎪ ◇ .alive
-⎪ ◇ .runtime
-⎪ ◇ .uptime
-⎪ ◇ .info
-⎪ ◇ .myid
-⎪ ◇ .id
-⎪ ◇ .time
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 17
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *PAGE 11: STORE (HUBX)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⎪ ◇ .hubx store
-⎪ ◇ .hubx balance
-⎪ ◇ .hubx orders
-⎪ ◇ .hubx buy
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-⎪ TOTAL COMMANDS : 4
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📞 *پشتیبانی (سلطان شیرزی):*
-wa.me/93794384087
-
-🔥 *POWERED BY 👑 RAEES SULTAN BOT*
-`;
-
-        // 🚀 ارسال متن منو
-        await sock.sendMessage(from, { text: menuText }, { quoted: m });
+        // 🚀 ارسال پیام آخر با دکمه لینک کانال
+        await sock.sendMessage(from, {
+            text: `📞 *پشتیبانی:* wa.me/93794384087\n\n🔥 *POWERED BY 👑 RAEES SULTAN BOT*`,
+            footer: "👑 RAEES SULTAN BOT",
+            templateButtons: [
+                { 
+                    urlButton: { 
+                        displayText: '📢 JOIN OFFICIAL CHANNEL', 
+                        url: 'https://whatsapp.com/channel/0029VbDOqY8DOQIcTC1Epm2H' 
+                    } 
+                }
+            ]
+        }, { quoted: m });
 
     } catch (e) {
         console.log("ALLMENU ERROR:", e.message);
