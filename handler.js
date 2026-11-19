@@ -48,10 +48,6 @@ function cleanText(text) {
     return text.toLowerCase().replace(/[؟?!.,،]/g, "").trim();
 }
 
-// =======================
-// LOAD COMMANDS SAFE
-// =======================
-
 const files = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
 
 for (const file of files) {
@@ -65,16 +61,12 @@ for (const file of files) {
     }
 }
 
-// =======================
-// HANDLER
-// =======================
-
 export default async function handler(sock, from, body, m) {
     try {
         if (!body) return;
         body = body.trim();
 
-        // 🚨 محافظ جدید: اگر پیام از خودت بود و با ! شروع نشده بود، کاملاً نادیده بگیر (تا پیام‌های شخصی‌ت پاک نشن)
+        // 🚨 محافظ جدید: پیام‌های شخصی خودت رو نادیده بگیر
         if (m.key.fromMe && !body.startsWith("!")) {
             return; 
         }
