@@ -54,25 +54,16 @@ function cleanText(text) {
 
 const files = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
 
-console.log(`🚀 [HANDLER] Found ${files.length} command files. Starting to load...`);
-
 for (const file of files) {
     try {
-        // 🚨 این لاگ دقیقاً میگه کدوم فایل داره لود میشه
-        console.log(`⏳ [HANDLER] Loading file: ${file}`);
-        
         const cmd = await import(`./commands/${file}`);
-
         if (cmd.default) {
             commands.set(file.replace(".js", "").toLowerCase(), cmd.default);
         }
-
     } catch (e) {
         console.log("LOAD ERROR:", file, e.message);
     }
 }
-
-console.log(`✅ [HANDLER] All ${files.length} command files loaded successfully!`);
 
 // =======================
 // HANDLER
@@ -82,6 +73,11 @@ export default async function handler(sock, from, body, m) {
     try {
         if (!body) return;
         body = body.trim();
+
+        // 🚨 محافظ جدید: اگر پیام از خودت بود و با ! شروع نشده بود، کاملاً نادیده بگیر (تا پیام‌های شخصی‌ت پاک نشن)
+        if (m.key.fromMe && !body.startsWith("!")) {
+            return; 
+        }
 
         try { trackSocial(from, m); } catch (e) {}
 
