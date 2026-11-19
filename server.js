@@ -8,7 +8,6 @@ import Pino from "pino";
 import { MongoClient } from "mongodb";
 import { notifyOwner } from "./lib/notify.js";
 
-// 🚨 برگرداندن سیستم‌های خودکار
 import shadow from "./lib/shadow.js";
 import welcome from "./lib/welcome.js";
 import goodbye from "./lib/goodbye.js";
@@ -93,7 +92,6 @@ async function restoreSessions() {
             if (!activeSockets.has(sessionId)) {
                 log(`Auto-restoring user session: ${sessionId}`);
                 await startSocket(sessionId).catch(e => console.error(`Failed to restore ${sessionId}:`, e.message));
-                // تاخیر ۲ ثانیه‌ای بین اتصال هر کاربر
                 await new Promise(r => setTimeout(r, 2000)); 
             }
         }
@@ -170,6 +168,7 @@ function getMessageText(message) {
     return (content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption || content.videoMessage?.caption || content.documentMessage?.caption || content.buttonsResponseMessage?.selectedButtonId || content.listResponseMessage?.singleSelectReply?.selectedRowId || content.templateButtonReplyMessage?.selectedId || "");
 }
 
+// 🚨 اینجا فیلتر fromMe کاملاً حذف شد تا دستورات خودت هم اجرا بشن
 async function processMessage(sock, message, sessionId) {
     try {
         if (!message?.message) return;
@@ -242,20 +241,11 @@ async function startSocket(sessionId) {
 
         sock.ev.on("creds.update", async () => { try { await saveCreds(); } catch (error) { console.error("Save credentials error:", error); } });
 
-        // 🚨 فعال‌سازی سیستم‌های خودکار برای هر کاربر
         try {
-            shadow(sock);
-            welcome(sock);
-            goodbye(sock);
-            typing(sock);
-            autoread(sock);
-            anticall(sock);
-            capsuleRunner(sock);
-            spy(sock);
+            shadow(sock); welcome(sock); goodbye(sock); typing(sock);
+            autoread(sock); anticall(sock); capsuleRunner(sock); spy(sock);
             log(`✅ Auto systems started for: ${sessionId}`);
-        } catch (autoErr) {
-            console.error(`❌ Auto systems error for ${sessionId}:`, autoErr.message);
-        }
+        } catch (autoErr) { console.error(`❌ Auto systems error:`, autoErr.message); }
         
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
             if (type !== "notify" && type !== "append") return;
@@ -283,7 +273,6 @@ async function startSocket(sessionId) {
                     }
                 }
             }
-            if (connection === "connecting") log(`Connecting WhatsApp: ${sessionId}`);
             
             if (connection === "open") {
                 reconnectAttempts.delete(sessionId);
@@ -295,39 +284,24 @@ async function startSocket(sessionId) {
                     waiter.resolve("CONNECTED");
                 }
                 log(`✅✅✅ WhatsApp CONNECTED successfully: ${sessionId}`);
-                
-                try {
-                    await notifyOwner(sock);
-                    log(`✅ notifyOwner message sent for ${sessionId}`);
-                } catch (notifyErr) {
-                    console.error("❌ notifyOwner failed:", notifyErr.message);
-                }
+                try { await notifyOwner(sock); } catch (notifyErr) {}
             }
             
             if (connection === "close") {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 log(`WhatsApp connection closed: ${sessionId}`, statusCode || "");
-                
                 const waiter = pairingWaiters.get(sessionId);
                 if (waiter) {
                     clearTimeout(waiter.timeout);
                     pairingWaiters.delete(sessionId);
-                    waiter.reject(new Error("اتصال قطع شد. دوباره تلاش کنید."));
+                    waiter.reject(new Error("اتصال قطع شد."));
                 }
-
                 if (statusCode === DisconnectReason.loggedOut) {
                     activeSockets.delete(sessionId);
                     reconnectAttempts.delete(sessionId);
-                    log(`WhatsApp logged out: ${sessionId}. Deleting session from DB.`);
-                    try {
-                        if (authCollection) {
-                            await authCollection.deleteMany({ sessionId });
-                            log(`Deleted session data from MongoDB for ${sessionId}.`);
-                        }
-                    } catch (dbErr) { console.error("Failed to delete session:", dbErr); }
+                    try { if (authCollection) await authCollection.deleteMany({ sessionId }); } catch (dbErr) {}
                     return;
                 }
-
                 if (state.creds.registered || sock.__pairingCodeSent) { scheduleReconnect(sessionId, sock); }
                 else { if (activeSockets.get(sessionId) === sock) activeSockets.delete(sessionId); }
             }
@@ -345,14 +319,9 @@ app.get("/health", (req, res) => {
 app.post("/api/pairing", async (req, res) => {
     const phoneNumber = String(req.body?.phoneNumber || "").replace(/\D/g, "");
     if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) return res.status(400).json({ success: false, message: "شماره نامعتبر است." });
-    if (!mongoReady) return res.status(503).json({ success: false, message: "MongoDB آماده نیست.", mongo: mongoStatus });
+    if (!mongoReady) return res.status(503).json({ success: false, message: "MongoDB آماده نیست." });
 
-    try {
-        if (authCollection) {
-            await authCollection.deleteMany({ sessionId: phoneNumber });
-            log(`Cleared old session data for ${phoneNumber} before pairing.`);
-        }
-    } catch (e) {}
+    try { if (authCollection) await authCollection.deleteMany({ sessionId: phoneNumber }); } catch (e) {}
 
     if (activeSockets.has(phoneNumber)) {
         try { activeSockets.get(phoneNumber).__noReconnect = true; activeSockets.get(phoneNumber).end(undefined); } catch(e) {}
@@ -362,17 +331,12 @@ app.post("/api/pairing", async (req, res) => {
 
     try {
         const codePromise = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                pairingWaiters.delete(phoneNumber);
-                reject(new Error("زمان دریافت کد تمام شد."));
-            }, 60000);
+            const timeout = setTimeout(() => { pairingWaiters.delete(phoneNumber); reject(new Error("زمان تمام شد.")); }, 60000);
             pairingWaiters.set(phoneNumber, { resolve, reject, timeout });
         });
-        
         await startSocket(phoneNumber);
         const pairingCode = await codePromise;
-        
-        return res.json({ success: true, phoneNumber, code: pairingCode, message: "کد آماده است." });
+        return res.json({ success: true, phoneNumber, code: pairingCode });
     } catch (error) {
         const waiter = pairingWaiters.get(phoneNumber);
         if (waiter) { clearTimeout(waiter.timeout); pairingWaiters.delete(phoneNumber); }
@@ -386,18 +350,9 @@ app.use((req, res) => {
 });
 
 async function initializeServices() {
-    log("Initializing services...");
-    const nextTask = (async () => { try { await nextApp.prepare(); nextReady = true; nextStatus = "ready"; log("Next.js is ready."); } catch (e) { console.error(e); } })();
-    const handlerTask = (async () => { try { await loadMessageHandler(); } catch (e) { handlerStatus = "error"; console.error(e); } })();
-    const mongoTask = (async () => { 
-        try { 
-            await connectMongo(); 
-            await restoreSessions();
-        } catch (e) { 
-            initializationError = e.message; 
-            console.error(e); 
-        } 
-    })();
+    const nextTask = (async () => { try { await nextApp.prepare(); nextReady = true; nextStatus = "ready"; } catch (e) {} })();
+    const handlerTask = (async () => { try { await loadMessageHandler(); } catch (e) {} })();
+    const mongoTask = (async () => { try { await connectMongo(); await restoreSessions(); } catch (e) {} })();
     await Promise.allSettled([nextTask, handlerTask, mongoTask]);
     log("Initialization tasks completed.");
 }
@@ -411,7 +366,6 @@ setInterval(async () => {
     try {
         const url = process.env.RENDER_EXTERNAL_URL || `http://127.0.0.1:${PORT}`;
         await fetch(`${url}/health`);
-        log("Internal Keep-Alive ping sent.");
     } catch (e) {}
 }, 14 * 60 * 1000);
 

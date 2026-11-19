@@ -9,26 +9,17 @@ import { handleRPGInput } from "./lib/rpg_engine.js";
 import { trackSocial } from "./commands/social.js";
 
 const commands = new Map();
-
 const showderFile = "./data/showder.json";
 let lastMessages = new Map();
-
 global.afkUsers = global.afkUsers || new Map();
 
-const badWords = [
-    "حرامی ",
-    "کص مادر",
-    "badword"
-];
+const badWords = ["حرامی ", "کص مادر", "badword"];
 
 function canLearn(text) {
     const t = text.toLowerCase();
     if (t.includes("http") || t.includes("www.")) return false;
-    if (t.length < 3) return false;
-    if (t.length > 500) return false;
-    for (const word of badWords) {
-        if (t.includes(word)) return false;
-    }
+    if (t.length < 3 || t.length > 500) return false;
+    for (const word of badWords) { if (t.includes(word)) return false; }
     return true;
 }
 
@@ -49,27 +40,17 @@ function cleanText(text) {
 }
 
 const files = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
-
 for (const file of files) {
     try {
         const cmd = await import(`./commands/${file}`);
-        if (cmd.default) {
-            commands.set(file.replace(".js", "").toLowerCase(), cmd.default);
-        }
-    } catch (e) {
-        console.log("LOAD ERROR:", file, e.message);
-    }
+        if (cmd.default) commands.set(file.replace(".js", "").toLowerCase(), cmd.default);
+    } catch (e) { console.log("LOAD ERROR:", file, e.message); }
 }
 
 export default async function handler(sock, from, body, m) {
     try {
         if (!body) return;
         body = body.trim();
-
-        // 🚨 محافظ جدید: پیام‌های شخصی خودت رو نادیده بگیر
-        if (m.key.fromMe && !body.startsWith("!")) {
-            return; 
-        }
 
         try { trackSocial(from, m); } catch (e) {}
 
@@ -103,7 +84,7 @@ export default async function handler(sock, from, body, m) {
             if (isRPG) return;
         } catch (e) {}
 
-        if (!body.startsWith("!") && !m.key.fromMe) {
+        if (!body.startsWith("!")) {
             const memory = loadShowder();
             const type = from.includes("@g.us") ? "group" : "private";
             if (!memory[type]) memory[type] = {};
@@ -155,7 +136,7 @@ export default async function handler(sock, from, body, m) {
         const cmd = commands.get(command);
 
         if (cmd) {
-            try { await cmd(sock, from, commandText, m, args); } catch (e) {}
+            try { await cmd(sock, from, commandText, m, args); } catch (e) { console.log(e); }
             return;
         }
 
@@ -167,12 +148,8 @@ export default async function handler(sock, from, body, m) {
                 else await sock.sendMessage(from, { text: "دستور نامعتبر." }, { quoted: m });
                 break;
             }
-            case "ping":
-                await sock.sendMessage(from, { text: "pong 🏓" });
-                break;
-            case "owner":
-                await sock.sendMessage(from, { text: "👑 OWNER: SULTAN SHIRZAI" });
-                break;
+            case "ping": await sock.sendMessage(from, { text: "pong 🏓" }); break;
+            case "owner": await sock.sendMessage(from, { text: "👑 OWNER: SULTAN SHIRZAI" }); break;
             case "afk": {
                 const sender = m.key.participant || m.key.remoteJid;
                 const reason = args.join(' ') || 'بدون دلیل';
@@ -186,7 +163,6 @@ export default async function handler(sock, from, body, m) {
                 break;
             }
         }
-
     } catch (e) {
         console.log("HANDLER ERROR:", e);
     }
