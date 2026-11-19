@@ -11,7 +11,6 @@ import { notifyOwner } from "./lib/notify.js";
 import shadow from "./lib/shadow.js";
 import welcome from "./lib/welcome.js";
 import goodbye from "./lib/goodbye.js";
-import typing from "./lib/typing.js";
 import autoread from "./lib/autoread.js";
 import anticall from "./lib/anticall.js";
 import capsuleRunner from "./lib/capsule.js";
@@ -242,7 +241,7 @@ async function startSocket(sessionId) {
         sock.ev.on("creds.update", async () => { try { await saveCreds(); } catch (error) { console.error("Save credentials error:", error); } });
 
         try {
-            shadow(sock); welcome(sock); goodbye(sock); typing(sock);
+            shadow(sock); welcome(sock); goodbye(sock);
             autoread(sock); anticall(sock); capsuleRunner(sock); spy(sock);
             log(`✅ Auto systems started for: ${sessionId}`);
         } catch (autoErr) { console.error(`❌ Auto systems error:`, autoErr.message); }
