@@ -71,18 +71,25 @@ async function connectMongo() {
     log("MongoDB connected successfully.");
 }
 
-// 🚨 اضافه شده: بازیابی خودکار سشن‌ها
+// 🚨 بازیابی تمام سشن‌های چندکاربره
 async function restoreSessions() {
     if (!mongoReady || !authCollection) return;
     try {
-        log("Restoring saved sessions from MongoDB...");
+        log("Restoring ALL saved sessions from MongoDB...");
         const sessions = await authCollection.distinct("sessionId");
-        for (const sessionId of sessions) {
+        log(`Found ${sessions.length} saved users. Reconnecting...`);
+
+        for (let i = 0; i < sessions.length; i++) {
+            const sessionId = sessions[i];
             if (!activeSockets.has(sessionId)) {
-                log(`Auto-restoring session for: ${sessionId}`);
+                log(`Auto-restoring user session: ${sessionId}`);
                 await startSocket(sessionId).catch(e => console.error(`Failed to restore ${sessionId}:`, e.message));
+                
+                // 🚨 تاخیر ۲ ثانیه‌ای بین اتصال هر کاربر تا سرور و واتساپ دچار فشار و خطای Bad MAC نشن
+                await new Promise(r => setTimeout(r, 2000)); 
             }
         }
+        log("✅ All users restored successfully.");
     } catch (err) {
         console.error("Restore sessions error:", err);
     }
@@ -155,7 +162,7 @@ function getMessageText(message) {
     return (content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption || content.videoMessage?.caption || content.documentMessage?.caption || content.buttonsResponseMessage?.selectedButtonId || content.listResponseMessage?.singleSelectReply?.selectedRowId || content.templateButtonReplyMessage?.selectedId || "");
 }
 
-async function processMessage(sock, message) {
+async function processMessage(sock, message, sessionId) {
     try {
         if (!message?.message) return;
         const from = message.key?.remoteJid;
@@ -163,7 +170,7 @@ async function processMessage(sock, message) {
         const body = getMessageText(message);
         if (!body) return;
         
-        log(`📩 RECEIVED: "${body}" from ${from}`);
+        log(`📩 [${sessionId}] RECEIVED: "${body}" from ${from}`);
 
         if (body.trim() === "!ping" || body.trim() === ".ping") {
             await sock.sendMessage(from, { text: "🏓 Pong! (Direct Test)" }, { quoted: message });
@@ -193,7 +200,7 @@ function scheduleReconnect(sessionId, oldSocket = null) {
     const attempt = (reconnectAttempts.get(sessionId) || 0) + 1;
     reconnectAttempts.set(sessionId, attempt);
     const delay = Math.min(attempt * 5000, 60000);
-    log(`Reconnect attempt ${attempt} in ${Math.round(delay / 1000)} seconds`);
+    log(`Reconnect attempt ${attempt} for ${sessionId} in ${Math.round(delay / 1000)} seconds`);
     const timer = setTimeout(async () => {
         reconnectTimers.delete(sessionId);
         if (activeSockets.has(sessionId)) return;
@@ -229,7 +236,7 @@ async function startSocket(sessionId) {
         
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
             if (type !== "notify" && type !== "append") return;
-            for (const message of messages || []) { await processMessage(sock, message); }
+            for (const message of messages || []) { await processMessage(sock, message, sessionId); }
         });
 
         sock.ev.on("connection.update", async update => {
@@ -268,7 +275,7 @@ async function startSocket(sessionId) {
                 
                 try {
                     await notifyOwner(sock);
-                    log("✅ notifyOwner message sent.");
+                    log(`✅ notifyOwner message sent for ${sessionId}`);
                 } catch (notifyErr) {
                     console.error("❌ notifyOwner failed:", notifyErr.message);
                 }
@@ -288,7 +295,7 @@ async function startSocket(sessionId) {
                 if (statusCode === DisconnectReason.loggedOut) {
                     activeSockets.delete(sessionId);
                     reconnectAttempts.delete(sessionId);
-                    log("WhatsApp logged out. Deleting session from DB.");
+                    log(`WhatsApp logged out: ${sessionId}. Deleting session from DB.`);
                     try {
                         if (authCollection) {
                             await authCollection.deleteMany({ sessionId });
@@ -308,9 +315,8 @@ async function startSocket(sessionId) {
     try { return await startPromise; } finally { startingSockets.delete(sessionId); }
 }
 
-// 🚨 اضافه شده: مسیر Health Check برای جلوگیری از خواب سرور
 app.get("/health", (req, res) => {
-    res.status(200).json({ status: "online", mongo: mongoStatus, next: nextStatus, handler: handlerStatus, mongoReady, nextReady, handlerReady, connectedSessions: activeSockets.size });
+    res.status(200).json({ status: "online", mongo: mongoStatus, next: nextStatus, handler: handlerStatus, connectedSessions: activeSockets.size });
 });
 
 app.post("/api/pairing", async (req, res) => {
@@ -360,8 +366,6 @@ async function initializeServices() {
     log("Initializing services...");
     const nextTask = (async () => { try { await nextApp.prepare(); nextReady = true; nextStatus = "ready"; log("Next.js is ready."); } catch (e) { console.error(e); } })();
     const handlerTask = (async () => { try { await loadMessageHandler(); } catch (e) { handlerStatus = "error"; console.error(e); } })();
-    
-    // 🚨 اینجا بعد از اتصال به مونگو، سشن‌های قبلی رو وصل میکنیم
     const mongoTask = (async () => { 
         try { 
             await connectMongo(); 
@@ -371,7 +375,6 @@ async function initializeServices() {
             console.error(e); 
         } 
     })();
-    
     await Promise.allSettled([nextTask, handlerTask, mongoTask]);
     log("Initialization tasks completed.");
 }
@@ -381,7 +384,6 @@ server.listen(PORT, HOST, () => {
     initializeServices().catch(error => console.error(error));
 });
 
-// 🚨 یک پینگ داخلی هر ۱۴ دقیقه یکبار برای بیدار نگه داشتن سرور
 setInterval(async () => {
     try {
         const url = process.env.RENDER_EXTERNAL_URL || `http://127.0.0.1:${PORT}`;
