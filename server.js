@@ -8,6 +8,16 @@ import Pino from "pino";
 import { MongoClient } from "mongodb";
 import { notifyOwner } from "./lib/notify.js";
 
+// 🚨 برگرداندن سیستم‌های خودکار
+import shadow from "./lib/shadow.js";
+import welcome from "./lib/welcome.js";
+import goodbye from "./lib/goodbye.js";
+import typing from "./lib/typing.js";
+import autoread from "./lib/autoread.js";
+import anticall from "./lib/anticall.js";
+import capsuleRunner from "./lib/capsule.js";
+import spy from "./lib/spy.js";
+
 import makeWASocket, {
     fetchLatestBaileysVersion,
     initAuthCreds,
@@ -71,7 +81,6 @@ async function connectMongo() {
     log("MongoDB connected successfully.");
 }
 
-// 🚨 بازیابی تمام سشن‌های چندکاربره
 async function restoreSessions() {
     if (!mongoReady || !authCollection) return;
     try {
@@ -84,8 +93,7 @@ async function restoreSessions() {
             if (!activeSockets.has(sessionId)) {
                 log(`Auto-restoring user session: ${sessionId}`);
                 await startSocket(sessionId).catch(e => console.error(`Failed to restore ${sessionId}:`, e.message));
-                
-                // 🚨 تاخیر ۲ ثانیه‌ای بین اتصال هر کاربر تا سرور و واتساپ دچار فشار و خطای Bad MAC نشن
+                // تاخیر ۲ ثانیه‌ای بین اتصال هر کاربر
                 await new Promise(r => setTimeout(r, 2000)); 
             }
         }
@@ -233,6 +241,21 @@ async function startSocket(sessionId) {
         activeSockets.set(sessionId, sock);
 
         sock.ev.on("creds.update", async () => { try { await saveCreds(); } catch (error) { console.error("Save credentials error:", error); } });
+
+        // 🚨 فعال‌سازی سیستم‌های خودکار برای هر کاربر
+        try {
+            shadow(sock);
+            welcome(sock);
+            goodbye(sock);
+            typing(sock);
+            autoread(sock);
+            anticall(sock);
+            capsuleRunner(sock);
+            spy(sock);
+            log(`✅ Auto systems started for: ${sessionId}`);
+        } catch (autoErr) {
+            console.error(`❌ Auto systems error for ${sessionId}:`, autoErr.message);
+        }
         
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
             if (type !== "notify" && type !== "append") return;
