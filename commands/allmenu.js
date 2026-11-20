@@ -1,5 +1,21 @@
 import fs from "fs";
 
+// 🔤 تبدیل متن عادی به حروف بولد-سریف یونیکد (مثل تصویر نمونه)
+function toBoldSerif(str) {
+    const map = {};
+    const upperStart = 0x1D400; // 𝐀
+    const lowerStart = 0x1D41A; // 𝐚
+    const digitStart = 0x1D7CE; // 𝟎
+    for (let i = 0; i < 26; i++) {
+        map[String.fromCharCode(65 + i)] = String.fromCodePoint(upperStart + i); // A-Z
+        map[String.fromCharCode(97 + i)] = String.fromCodePoint(lowerStart + i); // a-z
+    }
+    for (let i = 0; i < 10; i++) {
+        map[String(i)] = String.fromCodePoint(digitStart + i); // 0-9
+    }
+    return str.split("").map(ch => map[ch] || ch).join("");
+}
+
 export default async function allmenu(sock, from, body, m, args) {
     try {
         const pushname = m.pushName || "کاربر";
@@ -79,14 +95,26 @@ export default async function allmenu(sock, from, body, m, args) {
             }
         ];
 
+        // 🎨 ساخت باکس به سبک تصویر نمونه (◆ گوشه‌ها + ⬡ بولت‌ها + حروف بولد-سریف)
+        function buildBox(section) {
+            const boldTitle = toBoldSerif(section.title);
+            const boldTotalLabel = toBoldSerif("TOTAL COMMANDS LIST");
+            const topLine = `┌─────── ◆ ${boldTitle} ◆ ───────`;
+            const bottomLine = "────────────────────────── L";
+
+            let text = `${topLine}\n│\n`;
+            for (const cmd of section.commands) {
+                text += `│  ⬡  ${cmd}\n`;
+            }
+            text += `│\n`;
+            text += `│  ${boldTotalLabel} : ${section.total}\n`;
+            text += `${bottomLine}`;
+            return text;
+        }
+
         // 🚀 ارسال هر بخش در یک پیام جداگانه (شبیه به کارت شناور)
         for (const section of sections) {
-            let text = `┌─────── ⬥ ${section.title}\n│\n`;
-            for (const cmd of section.commands) {
-                text += `│ ⬡ ${cmd}\n`;
-            }
-            text += `│\n│ TOTAL COMMANDS LIST : ${section.total}\n└───────`;
-            
+            const text = buildBox(section);
             await sock.sendMessage(from, { text });
             // یک مکث کوتاه بین پیام‌ها تا اسپم نشود و کاربر بتواند بخواند
             await new Promise(r => setTimeout(r, 800));
@@ -97,11 +125,11 @@ export default async function allmenu(sock, from, body, m, args) {
             text: `📞 *پشتیبانی:* wa.me/93794384087\n\n🔥 *POWERED BY 👑 RAEES SULTAN BOT*`,
             footer: "👑 RAEES SULTAN BOT",
             templateButtons: [
-                { 
-                    urlButton: { 
-                        displayText: '📢 JOIN OFFICIAL CHANNEL', 
-                        url: 'https://whatsapp.com/channel/0029VbDOqY8DOQIcTC1Epm2H' 
-                    } 
+                {
+                    urlButton: {
+                        displayText: '📢 JOIN OFFICIAL CHANNEL',
+                        url: 'https://whatsapp.com/channel/0029VbDOqY8DOQIcTC1Epm2H'
+                    }
                 }
             ]
         }, { quoted: m });
