@@ -1,143 +1,76 @@
-import fetch from "node-fetch";
+import axios from "axios";
 
+// ========================================
+// WEATHER — ZONE.ID API
+// ========================================
 
-export default async function weather(
-sock,
-from,
-body,
-m,
-args
-){
+const API_KEY = "freekey";
+const API_URL = "https://pro-apis.zone.id/api/tools/weather"\;
 
-try{
+export default async function weather(sock, from, body, m, args) {
+    try {
+        const city = args?.join(" ").trim();
 
+        if (!city) {
+            return await sock.sendMessage(from, {
+                text:
+                    "🌤️ *WEATHER*\n\n" +
+                    "برای دیدن وضعیت آب‌وهوا:\n" +
+                    "➜ .weather نام شهر\n\n" +
+                    "مثال:\n" +
+                    "➜ .weather Kabul"
+            }, { quoted: m });
+        }
 
-const city =
-args.join(" ").trim();
+        const response = await axios.get(API_URL, {
+            params: {
+                key: API_KEY,
+                city: city
+            },
+            timeout: 30000
+        });
 
+        const result = response.data;
 
+        if (!result?.success || !result?.data) {
+            return await sock.sendMessage(from, {
+                text: `❌ اطلاعات آب‌وهوا برای «${city}» پیدا نشد.`
+            }, { quoted: m });
+        }
 
-if(!city){
+        const w = result.data;
 
-return sock.sendMessage(from,{
-text:
-"📌 استفاده:\n!weather Kabul"
-});
+        let forecastText = "";
+        if (Array.isArray(w.forecast) && w.forecast.length > 0) {
+            forecastText = "\n📅 *پیش‌بینی:*\n";
+            for (const f of w.forecast) {
+                forecastText += `• ${f.day}: ${f.condition} | 🔺${f.high} 🔻${f.low}\n`;
+            }
+        }
 
-}
+        const text =
+            `🌍 *${w.city}, ${w.country}*\n\n` +
+            `🌡️ دما: ${w.temperature?.celsius} (${w.temperature?.fahrenheit})\n` +
+            `☁️ وضعیت: ${w.condition}\n` +
+            `💧 رطوبت: ${w.humidity}\n` +
+            `💨 سرعت باد: ${w.windSpeed}\n` +
+            `☀️ شاخص UV: ${w.uvIndex}\n` +
+            `🏭 کیفیت هوا: ${w.airQuality}\n` +
+            forecastText +
+            `\n👑 *RAEES SULTAN BOT*`;
 
+        return await sock.sendMessage(from, { text }, { quoted: m });
 
+    } catch (error) {
+        console.error("WEATHER COMMAND ERROR:", error.response?.data || error.message);
 
-const response =
-await fetch(
-`https://wttr.in/${encodeURIComponent(city)}?format=j1`
-);
+        const apiError =
+            error.response?.data?.message ||
+            error.response?.data?.error ||
+            error.message;
 
-
-
-if(!response.ok){
-
-return sock.sendMessage(from,{
-text:
-"❌ سرویس هواشناسی در دسترس نیست"
-});
-
-}
-
-
-
-const data =
-await response.json();
-
-
-
-const current =
-data.current_condition?.[0];
-
-
-
-if(!current){
-
-return sock.sendMessage(from,{
-text:
-"❌ اطلاعات هوا پیدا نشد"
-});
-
-}
-
-
-
-let icon = "🌤️";
-
-
-const weather =
-current.weatherDesc?.[0]?.value?.toLowerCase() || "";
-
-
-if(weather.includes("rain"))
-icon="🌧️";
-
-else if(weather.includes("cloud"))
-icon="☁️";
-
-else if(weather.includes("sun") || weather.includes("clear"))
-icon="☀️";
-
-else if(weather.includes("snow"))
-icon="❄️";
-
-
-
-await sock.sendMessage(from,{
-
-text:
-`
-╭━━━〔 ${icon} WEATHER 〕━━━╮
-
-📍 شهر:
-${city}
-
-🌡️ دما:
-${current.temp_C}°C
-
-🤔 احساس:
-${current.FeelsLikeC}°C
-
-💧 رطوبت:
-${current.humidity}%
-
-💨 سرعت باد:
-${current.windspeedKmph} km/h
-
-☁️ وضعیت:
-${current.weatherDesc[0].value}
-
-👁️ دید:
-${current.visibility} km
-
-🤖 SULTAN BUG BOT
-🟢 WEATHER SYSTEM ONLINE
-
-╰━━━━━━━━━━━━╯
-`
-
-});
-
-
-}catch(e){
-
-console.log(
-"WEATHER ERROR:",
-e
-);
-
-
-await sock.sendMessage(from,{
-text:
-"❌ خطا در دریافت وضعیت هوا"
-});
-
-}
-
-
+        return await sock.sendMessage(from, {
+            text: `❌ خطا در دریافت آب‌وهوا:\n\n${apiError}`
+        }, { quoted: m });
+    }
 }
