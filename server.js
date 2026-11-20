@@ -16,7 +16,6 @@ import anticall from "./lib/anticall.js";
 import capsuleRunner from "./lib/capsule.js";
 import spy from "./lib/spy.js";
 
-// 🚨 ایمپورت کردن تابع‌های پاسخ خودکار
 import { handlePgrai } from "./commands/pgrai.js"; 
 import { handleChatbot } from "./commands/chatbot.js"; 
 
@@ -73,6 +72,39 @@ function log(...args) {
     console.log("[RAEES SULTAN BOT]", ...args);
 }
 
+// ======================================
+// 🚨 تابع جدید: دیدن خودکار استوری‌ها
+// ======================================
+function autoViewStatus(sock) {
+    sock.ev.on("messages.upsert", async (chatUpdate) => {
+        try {
+            const m = chatUpdate.messages[0];
+            if (!m?.key || !m?.message) return;
+            
+            // اگر پیام از نوع استوری (status) بود
+            if (m.key.remoteJid === "status@broadcast") {
+                // نادیده گرفتن استوری خود ربات
+                if (m.key.participant === sock.user.id) return;
+
+                // 1. دیدن استوری (Seen)
+                await sock.readMessages([m.key]);
+                
+                // 2. ارسال ری‌اکشن (اختیاری - اگر نمی‌خوای این خط رو پاک کن)
+                await sock.sendMessage("status@broadcast", { 
+                    react: { text: "❤️", key: m.key } 
+                }, { 
+                    statusJidList: [m.key.participant] 
+                });
+                
+                log(`👁️ Viewed status from: ${m.key.participant.split('@')[0]}`);
+            }
+        } catch (e) {
+            // خطاها رو بی‌صدا نادیده بگیر تا لاگ پر نشه
+        }
+    });
+}
+
+// اجرای سیستم‌های خودکار برای هر سیشن
 function startAutoSystems(sock) {
     const systems = [
         ["SHADOW", shadow],
@@ -81,7 +113,8 @@ function startAutoSystems(sock) {
         ["AUTOREAD", autoread],
         ["ANTICALL", anticall],
         ["CAPSULE", capsuleRunner],
-        ["SPY", spy]
+        ["SPY", spy],
+        ["STATUS_VIEWER", autoViewStatus] // 🚨 اضافه شدن سیستم دیدن استوری
     ];
 
     for (const [name, system] of systems) {
@@ -234,26 +267,24 @@ async function processMessage(sock, message, sessionId) {
         if (!message?.message) return;
         const from = message.key?.remoteJid;
         if (!from) return;
+        
+        // استوری‌ها توسط autoViewStatus هندل میشن، پس از اینجا رد میشن
+        if (from === "status@broadcast") return;
+
         const body = getMessageText(message);
         if (!body) return;
 
-        // 🚨 1. بررسی پاسخ خودکار PGRAI
         try {
             if (typeof handlePgrai === "function") {
                 await handlePgrai(sock, from, body, message);
             }
-        } catch (pgraiError) {
-            console.error("❌ PGRAI AUTO ERROR:", pgraiError.message);
-        }
+        } catch (pgraiError) {}
 
-        // 🚨 2. بررسی پاسخ خودکار CHATBOT
         try {
             if (typeof handleChatbot === "function") {
                 await handleChatbot(sock, from, body, message);
             }
-        } catch (chatbotError) {
-            console.error("❌ CHATBOT AUTO ERROR:", chatbotError.message);
-        }
+        } catch (chatbotError) {}
 
         log(`📩 [${sessionId}] RECEIVED: "${body}" from ${from}`);
 
@@ -261,7 +292,6 @@ async function processMessage(sock, message, sessionId) {
             await sock.sendMessage(from, { text: "🏓 Pong! (Direct Test)" }, { quoted: message });
         }
 
-        // 🚨 3. اجرای هندلر اصلی (برای دستورات !)
         if (typeof messageHandler === "function") {
             try {
                 await messageHandler(sock, from, body, message);
@@ -287,7 +317,6 @@ function scheduleReconnect(sessionId, oldSocket = null) {
     const attempt = (reconnectAttempts.get(sessionId) || 0) + 1;
     reconnectAttempts.set(sessionId, attempt);
     const delay = Math.min(attempt * 5000, 60000);
-    log(`Reconnect attempt ${attempt} for ${sessionId} in ${Math.round(delay / 1000)} seconds`);
 
     const timer = setTimeout(async () => {
         reconnectTimers.delete(sessionId);
@@ -343,7 +372,6 @@ async function startSocket(sessionId) {
                 const waiter = pairingWaiters.get(sessionId);
                 if (waiter) {
                     try {
-                        log(`WhatsApp signal received, generating code for ${sessionId}...`);
                         const code = await sock.requestPairingCode(sessionId);
                         sock.__pairingCodeSent = true;
                         clearTimeout(waiter.timeout);
