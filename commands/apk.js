@@ -11,12 +11,14 @@ export default async function apk(sock, from, body, m, args) {
     try {
         const query = args?.join(" ").trim();
 
+        // 1) Help
         if (!query) {
             return await sock.sendMessage(from, {
                 text:
                     "📦 *APK DOWNLOADER*\n\n" +
                     "برای دانلود اپلیکیشن یا بازی:\n" +
-                    "➜ .apk subway surfers"
+                    "➜ .apk subway surfers\n" +
+                    "➜ .apk whatsapp"
             }, { quoted: m });
         }
 
@@ -24,35 +26,44 @@ export default async function apk(sock, from, body, m, args) {
             text: `🔎 در حال جستجوی *${query}* ...`
         }, { quoted: m });
 
+        // 2) Request
         const response = await axios.get(API_URL, {
             params: {
                 key: API_KEY,
                 q: query,
                 index: 1
             },
-            timeout: 30000
+            timeout: 30000,
+            validateStatus: status => status >= 200 && status < 500
         });
 
         const result = response.data;
 
+        // 3) API error
         if (!result?.success || !result?.data) {
             return await sock.sendMessage(from, {
-                text: `❌ نتیجه‌ای برای «${query}» پیدا نشد.`
+                text: `❌ نتیجه‌ای برای «${query}» پیدا نشد.\n\n` +
+                      (result?.message || "لطفاً نام اپلیکیشن را به انگلیسی وارد کنید.")
             }, { quoted: m });
         }
 
         const app = result.data;
 
+        // 4) Safe value helper
+        const val = (v, fallback = "نامشخص") =>
+            v === undefined || v === null || v === "" ? fallback : v;
+
+        // 5) Build caption
         const caption =
-            `📦 *${app.title}*\n\n` +
-            `🏷️ نسخه: ${app.version}\n` +
-            `👨‍💻 توسعه‌دهنده: ${app.developer}\n` +
-            `📱 سیستم‌عامل: ${app.os}\n` +
-            `⭐ امتیاز: ${app.rating}\n` +
-            `💾 حجم: ${app.size}\n\n` +
+            `📦 *${val(app.title)}*\n\n` +
+            `🏷️ نسخه: ${val(app.version)}\n` +
+            `👨‍💻 توسعه‌دهنده: ${val(app.developer)}\n` +
+            `📱 سیستم‌عامل: ${val(app.os)}\n` +
+            `⭐ امتیاز: ${val(app.rating)}\n` +
+            `💾 حجم: ${val(app.size)}\n\n` +
             `👑 *RAEES SULTAN BOT*`;
 
-        // ارسال تصویر معرفی برنامه
+        // 6) Send preview image (if available)
         if (app.imageUrl) {
             try {
                 await sock.sendMessage(from, {
@@ -67,12 +78,18 @@ export default async function apk(sock, from, body, m, args) {
             await sock.sendMessage(from, { text: caption }, { quoted: m });
         }
 
-        // ارسال فایل APK
+        // 7) Send APK document (only if downloadUrl exists)
+        if (!app.downloadUrl) {
+            return await sock.sendMessage(from, {
+                text: "❌ لینک دانلود مستقیم برای این اپلیکیشن پیدا نشد."
+            }, { quoted: m });
+        }
+
         await sock.sendMessage(from, {
             document: { url: app.downloadUrl },
             fileName: app.fileName || `${query.replace(/\s+/g, "_")}.apk`,
             mimetype: "application/vnd.android.package-archive",
-            caption: `📥 ${app.title}`
+            caption: `📥 ${val(app.title)}`
         }, { quoted: m });
 
     } catch (error) {
