@@ -53,11 +53,11 @@ export default async function pgrai(sock, from, body, m, args) {
     try {
         const action = args?.[0]?.toLowerCase();
         if (!["on", "off", "status"].includes(action)) {
-            return await sock.sendMessage(from, { text: "🤖 *PGRAI (Panjshiri AI)*\n\n➜ !pgrai on\n➜ !pgrai off\n➜ !pgrai status" });
+            return await sock.sendMessage(from, { text: "PGRAI Commands:\n!pgrai on\n!pgrai off\n!pgrai status" });
         }
 
         const admin = await isAdmin(sock, from, m);
-        if (!admin) return await sock.sendMessage(from, { text: "❌ فقط ادمین گروه می‌تواند PGRAI را تغییر دهد." });
+        if (!admin) return await sock.sendMessage(from, { text: "Only admins can change PGRAI." });
 
         const botId = sock.user.id.split(":")[0];
         const config = loadConfig();
@@ -67,25 +67,25 @@ export default async function pgrai(sock, from, body, m, args) {
             const enabled = from.endsWith("@g.us")
                 ? config.bots[botId].groups?.[from] === true
                 : config.bots[botId].private === true;
-            return await sock.sendMessage(from, { text: enabled ? "🟢 PGRAI روشن است." : "🔴 PGRAI خاموش است." });
+            return await sock.sendMessage(from, { text: enabled ? "PGRAI is ON" : "PGRAI is OFF" });
         }
 
         if (action === "on") {
             if (from.endsWith("@g.us")) config.bots[botId].groups[from] = true;
             else config.bots[botId].private = true;
             saveConfig(config);
-            return await sock.sendMessage(from, { text: "🟢 *PGRAI فعال شد!*" });
+            return await sock.sendMessage(from, { text: "PGRAI is now ON" });
         }
 
         if (action === "off") {
             if (from.endsWith("@g.us")) config.bots[botId].groups[from] = false;
             else config.bots[botId].private = false;
             saveConfig(config);
-            return await sock.sendMessage(from, { text: "🔴 *PGRAI خاموش شد!*" });
+            return await sock.sendMessage(from, { text: "PGRAI is now OFF" });
         }
     } catch (error) {
         console.error("PGRAI COMMAND ERROR:", error);
-        return await sock.sendMessage(from, { text: "❌ خطا در اجرای PGRAI." });
+        return await sock.sendMessage(from, { text: "Error in PGRAI command." });
     }
 }
 
@@ -105,27 +105,28 @@ export async function handlePgrai(sock, from, body, m) {
         const text = getMessageText(m);
         if (!text || text.startsWith("!") || text.startsWith("/") || text.startsWith(".") || text.length > 4000) return;
 
-        // 🚨 1. تشخیص سوال "تو کی هستی؟" و جواب دادن بدون نیاز به API
         const lowerText = text.toLowerCase();
+        
+        // Handle Identity Questions in English
         if (
             lowerText.includes("who are you") || 
-            lowerText.includes("تو کی هستی") || 
-            lowerText.includes("کی هستی") || 
-            lowerText.includes("اسمت چیه") ||
-            lowerText.includes("your name")
+            lowerText.includes("your name") ||
+            lowerText.includes("who is your creator") ||
+            lowerText.includes("your identity") ||
+            lowerText.includes("who made you")
         ) {
             return await sock.sendMessage(from, { 
-                text: "🤖 من *پنجشیری AI* هستم، ساخته شده توسط *شیرزی پنجشیری* (Shirzai Panjshiri). 👑\n\nهر سوالی داری بپرس تا کمکت کنم!" 
+                text: "I am Panjshiri AI, created by Shirzai Panjshiri." 
             });
         }
 
-        // 🚨 2. ارسال درخواست به API با شخصیت پنجشیری AI
+        // Send Request to AI
         const response = await axios.post(API_URL, {
             model: "mercury-2",
             messages: [
                 { 
                     role: "system", 
-                    content: "You are Panjshiri AI, a powerful and smart WhatsApp bot created by Shirzai Panjshiri. Always be helpful and answer in the user's language. If asked who you are, say you are Panjshiri AI created by Shirzai Panjshiri." 
+                    content: "You are Panjshiri AI, created by Shirzai Panjshiri. Answer in the user's language." 
                 },
                 { role: "user", content: text }
             ]
@@ -137,16 +138,15 @@ export async function handlePgrai(sock, from, body, m) {
         const answer = response.data?.choices?.[0]?.message?.content || response.data?.choices?.[0]?.text;
         
         if (!answer) {
-            return await sock.sendMessage(from, { text: "❌ متأسفانه پاسخی دریافت نشد. لطفاً دوباره تلاش کنید." });
+            return await sock.sendMessage(from, { text: "No response received from AI." });
         }
 
-        return await sock.sendMessage(from, { text: `🤖 *پنجشیری AI*\n\n${answer}` });
+        return await sock.sendMessage(from, { text: `Panjshiri AI:\n\n${answer}` });
 
     } catch (error) {
-        console.error("❌ PGRAI API ERROR:", error.message);
-        // اگر API ارور داد، به کاربر خطای شفاف بده
+        console.error("PGRAI API ERROR:", error.message);
         return await sock.sendMessage(from, { 
-            text: `❌ خطا در ارتباط با سرور هوش مصنوعی:\n\n${error.message}` 
+            text: `Error: ${error.message}` 
         });
     }
 }
