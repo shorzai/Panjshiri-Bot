@@ -1,11 +1,11 @@
 const API_KEY = "freekey";
 
 const SEARCH_API =
-    "https://pro-apis.zone.id/api/search/yts"\;
+    "https://pro-apis.zone.id/api/search/yts";
 
 // 🔁 دانلودر جایگزین (چون دانلودر pro-apis.zone.id کار نمی‌کرد)
 const VKR_API_KEY = "vkrdownloader";
-const VKR_DOWNLOAD_API = "https://vkrdownloader.xyz/server/"\;
+const VKR_DOWNLOAD_API = "https://vkrdownloader.xyz/server/";
 
 async function fetchJSON(url, timeout = 60000) {
     const response = await fetch(url, {
