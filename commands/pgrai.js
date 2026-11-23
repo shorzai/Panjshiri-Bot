@@ -53,7 +53,7 @@ export default async function pgrai(sock, from, body, m, args) {
     try {
         const action = args?.[0]?.toLowerCase();
         if (!["on", "off", "status"].includes(action)) {
-            return await sock.sendMessage(from, { text: "PGRAI Commands:\n!pgrai on\n!pgrai off\n!pgrai status" });
+            return await sock.sendMessage(from, { text: "PGRAI Commands: !pgrai on, !pgrai off, !pgrai status" });
         }
 
         const admin = await isAdmin(sock, from, m);
@@ -106,21 +106,18 @@ export async function handlePgrai(sock, from, body, m) {
         if (!text || text.startsWith("!") || text.startsWith("/") || text.startsWith(".") || text.length > 4000) return;
 
         const lowerText = text.toLowerCase();
-        
-        // Handle Identity Questions in English
         if (
             lowerText.includes("who are you") || 
-            lowerText.includes("your name") ||
-            lowerText.includes("who is your creator") ||
-            lowerText.includes("your identity") ||
-            lowerText.includes("who made you")
+            lowerText.includes("تو کی هستی") || 
+            lowerText.includes("کی هستی") || 
+            lowerText.includes("اسمت چیه") ||
+            lowerText.includes("your name")
         ) {
             return await sock.sendMessage(from, { 
-                text: "I am Panjshiri AI, created by Shirzai Panjshiri." 
+                text: "من پنجشیری AI هستم، ساخته شده توسط شیرزی پنجشیری." 
             });
         }
 
-        // Send Request to AI
         const response = await axios.post(API_URL, {
             model: "mercury-2",
             messages: [
@@ -141,7 +138,7 @@ export async function handlePgrai(sock, from, body, m) {
             return await sock.sendMessage(from, { text: "No response received from AI." });
         }
 
-        return await sock.sendMessage(from, { text: `Panjshiri AI:\n\n${answer}` });
+        return await sock.sendMessage(from, { text: `پنجشیری AI:\n\n${answer}` });
 
     } catch (error) {
         console.error("PGRAI API ERROR:", error.message);
