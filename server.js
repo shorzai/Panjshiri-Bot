@@ -8,7 +8,7 @@ import Pino from "pino";
 import { MongoClient } from "mongodb";
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
 
-// 🚨 ایمپورت سیستم‌های خودکار
+// ایمپورت سیستم‌های خودکار
 import { notifyOwner } from "./lib/notify.js";
 import shadow from "./lib/shadow.js";
 import welcome from "./lib/welcome.js";
@@ -18,7 +18,7 @@ import anticall from "./lib/anticall.js";
 import capsuleRunner from "./lib/capsule.js";
 import spy from "./lib/spy.js";
 
-// 🚨 ایمپورت هوش مصنوعی‌های خودکار
+// ایمپورت هوش مصنوعی‌های خودکار
 import { handlePgrai } from "./commands/pgrai.js"; 
 import { handleChatbot } from "./commands/chatbot.js"; 
 
@@ -75,7 +75,7 @@ function log(...args) {
 }
 
 // ======================================
-// 🚨 تابع دیدن خودکار استوری (Status)
+// سیستم دیدن خودکار استوری
 // ======================================
 function autoViewStatus(sock) {
     sock.ev.on("messages.upsert", async (chatUpdate) => {
@@ -93,7 +93,7 @@ function autoViewStatus(sock) {
 }
 
 // ======================================
-// 🚨 تابع دزدیدن عکس/ویدیوی View Once
+// سیستم دزدیدن View Once
 // ======================================
 function autoStealViewOnce(sock) {
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
@@ -131,14 +131,61 @@ function autoStealViewOnce(sock) {
 }
 
 // ======================================
-// 🚨 استارت زدن تمام سیستم‌های خودکار
+// سیستم ضد حذف
+// ======================================
+function antiDelete(sock) {
+    const msgCache = new Map();
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+        if (type !== "notify") return;
+        for (const m of messages) {
+            if (!m?.message || !m?.key?.id) continue;
+
+            if (!m.message.protocolMessage) {
+                msgCache.set(m.key.id, m);
+                if (msgCache.size > 500) msgCache.delete(msgCache.keys().next().value);
+            }
+
+            const protocolMsg = m.message.protocolMessage;
+            if (protocolMsg && protocolMsg.type === 0) { 
+                const revokedId = protocolMsg.key.id;
+                const originalMsg = msgCache.get(revokedId);
+                if (!originalMsg) continue;
+
+                try {
+                    const botJid = sock.user.id.split(":")[0] + "@s.whatsapp.net";
+                    const sender = originalMsg.key.participant || originalMsg.key.remoteJid;
+                    const isGroup = originalMsg.key.remoteJid.endsWith("@g.us");
+                    const chatType = isGroup ? "گروه 🏘️" : "خصوصی 👤";
+                    const content = originalMsg.message;
+                    const text = content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption || "پیام مدیا";
+
+                    let caption = `🚨 *پیام حذف شده کشف شد!*\n\n👤 *فرستنده:* @${sender.split('@')[0]}\n📍 *چت:* ${chatType}\n\n💬 *محتوا:* \n${text}`;
+
+                    if (content.imageMessage) {
+                        const buffer = await downloadMediaMessage(originalMsg, "buffer", {}, { logger: console, reuploadRequest: sock.updateMediaMessage });
+                        await sock.sendMessage(botJid, { image: buffer, caption, mentions: [sender] });
+                    } else if (content.videoMessage) {
+                         const buffer = await downloadMediaMessage(originalMsg, "buffer", {}, { logger: console, reuploadRequest: sock.updateMediaMessage });
+                         await sock.sendMessage(botJid, { video: buffer, caption, mentions: [sender] });
+                    } else {
+                        await sock.sendMessage(botJid, { text: caption, mentions: [sender] });
+                    }
+                } catch (err) {}
+            }
+        }
+    });
+}
+
+// ======================================
+// استارت زدن تمام سیستم‌های خودکار
 // ======================================
 function startAutoSystems(sock) {
     const systems = [
         ["SHADOW", shadow], ["WELCOME", welcome], ["GOODBYE", goodbye],
         ["AUTOREAD", autoread], ["ANTICALL", anticall], ["CAPSULE", capsuleRunner], ["SPY", spy],
         ["STATUS_VIEWER", autoViewStatus],
-        ["ANTIVIEWONCE", autoStealViewOnce]
+        ["ANTIVIEWONCE", autoStealViewOnce],
+        ["ANTI_DELETE", antiDelete]
     ];
 
     for (const [name, system] of systems) {
@@ -152,6 +199,9 @@ function startAutoSystems(sock) {
     }
 }
 
+// ======================================
+// MongoDB
+// ======================================
 async function connectMongo() {
     if (!MONGODB_URI) { mongoStatus = "missing_uri"; throw new Error("MongoDB URI پیدا نشد."); }
     mongoStatus = "connecting";
@@ -255,20 +305,16 @@ async function processMessage(sock, message, sessionId) {
     try {
         if (!message?.message) return;
         const from = message.key?.remoteJid;
-        if (!from || from === "status@broadcast") return; // استوری‌ها هندل شدن
+        if (!from || from === "status@broadcast") return;
 
         const body = getMessageText(message);
         if (!body) return;
 
-        // 🚨 1. بررسی پاسخ خودکار PGRAI
-        try {
-            if (typeof handlePgrai === "function") await handlePgrai(sock, from, body, message);
-        } catch (e) {}
-
-        // 🚨 2. بررسی پاسخ خودکار CHATBOT
-        try {
-            if (typeof handleChatbot === "function") await handleChatbot(sock, from, body, message);
-        } catch (e) {}
+        // 🚨 اجرای هوش مصنوعی‌ها (فقط روی پیام‌های کاربران)
+        if (!message.key.fromMe) {
+            try { if (typeof handlePgrai === "function") await handlePgrai(sock, from, body, message); } catch (e) {}
+            try { if (typeof handleChatbot === "function") await handleChatbot(sock, from, body, message); } catch (e) {}
+        }
 
         log(`📩 [${sessionId}] RECEIVED: "${body}" from ${from}`);
 
@@ -276,7 +322,7 @@ async function processMessage(sock, message, sessionId) {
             await sock.sendMessage(from, { text: "🏓 Pong! (Direct Test)" }, { quoted: message });
         }
 
-        // 🚨 3. اجرای هندلر اصلی
+        // 🚨 ارسال به هندلر اصلی
         if (typeof messageHandler === "function") {
             try {
                 await messageHandler(sock, from, body, message);
@@ -341,6 +387,32 @@ async function startSocket(sessionId) {
 
         sock.ev.on("creds.update", async () => { try { await saveCreds(); } catch (error) {} });
 
+        // 🚨 دریافت کد ۸ رقمی (دقیقاً مثل روشی که فوری جواب میداد)
+        if (!state.creds.registered) {
+            setTimeout(async () => {
+                try {
+                    const waiter = pairingWaiters.get(sessionId);
+                    if (waiter && !sock.__pairingCodeSent) {
+                        log(`Requesting pairing code for ${sessionId}...`);
+                        const code = await sock.requestPairingCode(sessionId);
+                        sock.__pairingCodeSent = true;
+                        clearTimeout(waiter.timeout);
+                        pairingWaiters.delete(sessionId);
+                        waiter.resolve(code);
+                        log(`✅ Pairing code generated: ${sessionId}`);
+                    }
+                } catch (error) {
+                    log(`❌ Pairing error: ${error.message}`);
+                    const waiter = pairingWaiters.get(sessionId);
+                    if (waiter) {
+                        clearTimeout(waiter.timeout);
+                        pairingWaiters.delete(sessionId);
+                        waiter.reject(error);
+                    }
+                }
+            }, 5000); // ۵ ثانیه صبر برای آماده شدن سوکت
+        }
+
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
             if (type !== "notify" && type !== "append") return;
             for (const message of messages || []) { await processMessage(sock, message, sessionId); }
@@ -349,24 +421,7 @@ async function startSocket(sessionId) {
         startAutoSystems(sock);
 
         sock.ev.on("connection.update", async update => {
-            const { connection, qr, lastDisconnect } = update;
-
-            if (qr && !state.creds.registered && !sock.__pairingCodeSent) {
-                const waiter = pairingWaiters.get(sessionId);
-                if (waiter) {
-                    try {
-                        const code = await sock.requestPairingCode(sessionId);
-                        sock.__pairingCodeSent = true;
-                        clearTimeout(waiter.timeout);
-                        pairingWaiters.delete(sessionId);
-                        waiter.resolve(code);
-                    } catch (error) {
-                        clearTimeout(waiter.timeout);
-                        pairingWaiters.delete(sessionId);
-                        waiter.reject(error);
-                    }
-                }
-            }
+            const { connection, lastDisconnect } = update;
 
             if (connection === "open") {
                 reconnectAttempts.delete(sessionId);
@@ -481,14 +536,13 @@ server.listen(PORT, HOST, () => {
 });
 
 // 🚨 سیستم جلوگیری از خواب سرور (Keep-Alive)
-// این تایمر هر ۱۰ دقیقه به خود سرور پینگ می‌زند تا رندر آن را نخواباند
 setInterval(async () => {
     try {
         const url = process.env.RENDER_EXTERNAL_URL || `http://127.0.0.1:${PORT}`;
         await fetch(`${url}/health`);
         log("Internal Keep-Alive ping sent.");
     } catch (error) {}
-}, 10 * 60 * 1000); // هر ۱۰ دقیقه
+}, 10 * 60 * 1000);
 
 process.on("unhandledRejection", error => console.error("Unhandled Rejection:", error));
 process.on("uncaughtException", error => console.error("Uncaught Exception:", error));
