@@ -1,11 +1,11 @@
-
 const API_KEY = "freekey";
 
 const SEARCH_API =
-    "https://pro-apis.zone.id/api/search/yts";
+    "https://pro-apis.zone.id/api/search/yts"\;
 
-const DOWNLOAD_API =
-    "https://pro-apis.zone.id/api/download/youtube";
+// 🔁 دانلودر جایگزین (چون دانلودر pro-apis.zone.id کار نمی‌کرد)
+const VKR_API_KEY = "vkrdownloader";
+const VKR_DOWNLOAD_API = "https://vkrdownloader.xyz/server/"\;
 
 async function fetchJSON(url, timeout = 60000) {
     const response = await fetch(url, {
@@ -28,6 +28,31 @@ async function fetchJSON(url, timeout = 60000) {
     if (!response.ok) {
         throw new Error(
             data.error || `API Error: ${response.status}`
+        );
+    }
+
+    return data;
+}
+
+// 🔁 درخواست به VKrDownloader (بدون هدر x-api-key چون کلید توی خود URL هست)
+async function fetchVkrJSON(url, timeout = 60000) {
+    const response = await fetch(url, {
+        signal: AbortSignal.timeout(timeout)
+    });
+
+    const text = await response.text();
+
+    let data;
+
+    try {
+        data = JSON.parse(text);
+    } catch {
+        throw new Error("پاسخ دانلودر معتبر نیست.");
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            data?.error || data?.message || `Downloader Error: ${response.status}`
         );
     }
 
@@ -73,21 +98,47 @@ function getVideoUrl(song) {
     );
 }
 
-function getDownloadUrl(data) {
-    const d = data?.data || {};
+// 🔁 گرفتن لیست فرمت‌ها از پاسخ VKrDownloader (چند ساختار محتمل را پوشش می‌دهد)
+function getVkrFormats(data) {
+    const candidates = [
+        data?.formats,
+        data?.data?.formats,
+        data?.result?.formats,
+        data?.medias,
+        data?.data?.medias
+    ];
 
-    return (
-        d.downloadUrl ||
-        d.download_url ||
-        d.download ||
-        d.url ||
-        d.link ||
-        data.downloadUrl ||
-        data.download_url ||
-        data.url ||
-        data.link ||
-        ""
-    );
+    return candidates.find(Array.isArray) || [];
+}
+
+// 🔁 از بین فرمت‌ها، اول دنبال فرمت صوتی (mp3/m4a/aac/opus) می‌گردیم
+function pickAudioFormat(formats) {
+    return formats.find(f => {
+        const ext = (f.ext || f.format_id || "").toString().toLowerCase();
+        return (
+            ext.includes("mp3") ||
+            ext.includes("m4a") ||
+            ext.includes("aac") ||
+            ext.includes("opus") ||
+            ext.includes("audio")
+        );
+    });
+}
+
+// 🔁 اگر فرمت صوتی نبود، پایین‌ترین کیفیت ویدیو را برمی‌داریم (برای کاهش حجم)
+function pickSmallestVideoFormat(formats) {
+    const videos = formats.filter(f => {
+        const ext = (f.ext || "").toString().toLowerCase();
+        return ext === "mp4" || ext === "webm";
+    });
+
+    if (!videos.length) return formats[0];
+
+    return videos.sort((a, b) => {
+        const qa = parseInt(a.format_id) || 9999;
+        const qb = parseInt(b.format_id) || 9999;
+        return qa - qb;
+    })[0];
 }
 
 export default async function play(
@@ -125,7 +176,7 @@ export default async function play(
         let videoUrl = query;
         let song = {};
 
-        // جست‌وجوی آهنگ
+        // جست‌وجوی آهنگ (دست‌نخورده، چون سالم کار می‌کند)
         if (!isYouTubeLink(query)) {
 
             const searchURL = new URL(SEARCH_API);
@@ -176,80 +227,85 @@ export default async function play(
             text:
                 "⬇️ *آهنگ پیدا شد!*\n\n" +
                 `🎵 ${songTitle}\n\n` +
-                "🎧 فرمت: MP3\n" +
-                "🎚 کیفیت: 128kbps\n\n" +
                 "در حال دانلود، لطفاً منتظر بمانید..."
         }, { quoted: m });
 
-        // درخواست دانلود
-        const downloadURL = new URL(DOWNLOAD_API);
+        // ------------------------------------
+        // 🔁 درخواست دانلود از VKrDownloader
+        // ------------------------------------
 
-        downloadURL.searchParams.set("key", API_KEY);
-        downloadURL.searchParams.set("url", videoUrl);
-        downloadURL.searchParams.set("type", "mp3");
-        downloadURL.searchParams.set("quality", "128");
+        const downloadURL = new URL(VKR_DOWNLOAD_API);
 
-        const downloadData = await fetchJSON(
+        downloadURL.searchParams.set("api_key", VKR_API_KEY);
+        downloadURL.searchParams.set("vkr", videoUrl);
+
+        const downloadData = await fetchVkrJSON(
             downloadURL.toString(),
             120000
         );
 
-        if (downloadData.success === false) {
+        const formats = getVkrFormats(downloadData);
+
+        if (!formats.length) {
             throw new Error(
-                downloadData.error ||
-                "دانلود آهنگ ناموفق بود."
+                "هیچ فرمت دانلودی در پاسخ دانلودر پیدا نشد."
             );
         }
 
-        const fileURL = getDownloadUrl(downloadData);
+        // اولویت با فرمت صوتی، در غیر این صورت پایین‌ترین کیفیت ویدیو
+        const audioFormat = pickAudioFormat(formats);
+        const chosenFormat = audioFormat || pickSmallestVideoFormat(formats);
+
+        const fileURL = chosenFormat?.url;
 
         if (!fileURL) {
             throw new Error(
-                "لینک فایل MP3 در پاسخ دانلودر پیدا نشد."
+                "لینک فایل در پاسخ دانلودر پیدا نشد."
             );
         }
 
-        // دریافت فایل صوتی
-        const audioResponse = await fetch(fileURL, {
+        // دریافت فایل
+        const fileResponse = await fetch(fileURL, {
             signal: AbortSignal.timeout(120000)
         });
 
-        if (!audioResponse.ok) {
+        if (!fileResponse.ok) {
             throw new Error(
-                "دریافت فایل صوتی ناموفق بود."
+                "دریافت فایل از دانلودر ناموفق بود."
             );
         }
 
         const contentType =
-            audioResponse.headers.get("content-type") || "";
+            fileResponse.headers.get("content-type") || "";
 
         if (
             contentType.includes("application/json") ||
             contentType.includes("text/html")
         ) {
             throw new Error(
-                "لینک دانلود به‌جای فایل صوتی، پاسخ متنی برگرداند."
+                "لینک دانلود به‌جای فایل، پاسخ متنی برگرداند."
             );
         }
 
-        const audioBuffer = Buffer.from(
-            await audioResponse.arrayBuffer()
+        const fileBuffer = Buffer.from(
+            await fileResponse.arrayBuffer()
         );
 
-        if (!audioBuffer.length) {
-            throw new Error("فایل صوتی خالی است.");
+        if (!fileBuffer.length) {
+            throw new Error("فایل دریافتی خالی است.");
         }
 
-        const maxSize = 25 * 1024 * 1024;
+        const maxSize = 90 * 1024 * 1024;
 
-        if (audioBuffer.length > maxSize) {
+        if (fileBuffer.length > maxSize) {
             throw new Error(
-                "حجم آهنگ بیشتر از 25 مگابایت است."
+                "حجم فایل بیشتر از حد مجاز ارسال در واتساپ است."
             );
         }
 
         const title =
-            downloadData.data?.title ||
+            downloadData?.title ||
+            downloadData?.data?.title ||
             songTitle ||
             "RAEES SULTAN MUSIC";
 
@@ -257,18 +313,28 @@ export default async function play(
             .replace(/[\\/:*?"<>|]/g, "")
             .slice(0, 100) || "Music";
 
-        // ارسال آهنگ به واتساپ
-        await sock.sendMessage(from, {
-            audio: audioBuffer,
-            mimetype: "audio/mpeg",
-            fileName: `${safeName}.mp3`,
-            ptt: false
-        }, { quoted: m });
+        // اگر فرمت صوتی پیدا شد، به‌صورت آهنگ ارسال می‌شود
+        if (audioFormat) {
+            await sock.sendMessage(from, {
+                audio: fileBuffer,
+                mimetype: "audio/mpeg",
+                fileName: `${safeName}.mp3`,
+                ptt: false
+            }, { quoted: m });
+        } else {
+            // در غیر این صورت به‌صورت ویدیو (چون فرمت صوتی جدا در دسترس نبود)
+            await sock.sendMessage(from, {
+                video: fileBuffer,
+                mimetype: "video/mp4",
+                fileName: `${safeName}.mp4`,
+                caption: `🎬 ${title}\n\n👑 RAEES SULTAN BOT`
+            }, { quoted: m });
+        }
 
         console.log(
             "PLAY SUCCESS:",
             title,
-            audioBuffer.length
+            fileBuffer.length
         );
 
     } catch (error) {
