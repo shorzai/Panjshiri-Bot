@@ -2,8 +2,8 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 
-const API_KEY = "sk_19bd4fe7932b84b43e7652f9a621d4da"; 
-const API_URL = "https://api.inceptionlabs.ai/v1/chat/completions"\;
+const API_KEY = "sk_19bd4fe7932b84b43e7652f9a621d4da";
+const API_URL = "https://api.inceptionlabs.ai/v1/chat/completions";
 
 const DATA_DIR = "./data";
 const DATA_FILE = path.join(DATA_DIR, "pgrai.json");
@@ -133,7 +133,7 @@ export async function handlePgrai(sock, from, body, m) {
         });
 
         const answer = response.data?.choices?.[0]?.message?.content || response.data?.choices?.[0]?.text;
-        
+
         if (!answer) {
             return await sock.sendMessage(from, { text: "No response received from AI." });
         }
