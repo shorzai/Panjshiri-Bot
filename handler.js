@@ -52,25 +52,41 @@ export default async function handler(sock, from, body, m) {
         if (!body) return;
         body = body.trim();
 
+        // 🚨 اگر پیام از خودت بود و با ! شروع نشده بود، نادیده بگیر (برای جلوگیری از حلقه)
+        if (m.key.fromMe && !body.startsWith("!")) {
+            return;
+        }
+
         try { trackSocial(from, m); } catch (e) {}
 
+        // بررسی دستورات (این بخش باید برای پیام‌های خودت هم کار کنه)
+        let commandText = body.trim();
+        if (/^!play/i.test(commandText)) {
+            const query = commandText.slice(5).trim();
+            commandText = query ? `!play ${query}` : "!play";
+        }
+
+        const match = commandText.match(/^!(\S+)(?:\s+(.*))?$/s);
+        if (match) {
+            const command = match[1].toLowerCase();
+            const args = match[2] ? match[2].trim().split(/\s+/) : [];
+            const cmd = commands.get(command);
+
+            if (cmd) {
+                try { await cmd(sock, from, commandText, m, args); } catch (e) { console.log(e); }
+                return;
+            }
+        }
+
+        // اگر پیام از خودت بود و دستور نبود، نادیده بگیر
+        if (m.key.fromMe) return;
+
+        // سیستم‌های امنیتی و AFK
         try {
             const senderJid = m.key.participant || m.key.remoteJid;
             if (global.afkUsers.has(senderJid) && !body.startsWith("!afk")) {
                 global.afkUsers.delete(senderJid);
                 await sock.sendMessage(from, { text: "👋 خوش برگشتی! وضعیت AFK شما حذف شد." }, { quoted: m });
-            }
-            const contextInfo = m.message?.extendedTextMessage?.contextInfo || m.message?.imageMessage?.contextInfo || m.message?.videoMessage?.contextInfo;
-            const mentioned = contextInfo?.mentionedJid || [];
-            const repliedTo = contextInfo?.participant ? [contextInfo.participant] : [];
-            const toCheck = [...mentioned, ...repliedTo];
-            for (const jid of toCheck) {
-                if (global.afkUsers.has(jid) && jid !== senderJid) {
-                    await sock.sendMessage(from, { 
-                        text: `💤 کاربر @${jid.split('@')[0]} در حال حاضر غایب است.\n📝 دلیل: ${global.afkUsers.get(jid)}`,
-                        mentions: [jid]
-                    }, { quoted: m });
-                }
             }
         } catch (e) {}
 
@@ -84,6 +100,7 @@ export default async function handler(sock, from, body, m) {
             if (isRPG) return;
         } catch (e) {}
 
+        // شوادر و هوش مصنوعی
         if (!body.startsWith("!")) {
             const memory = loadShowder();
             const type = from.includes("@g.us") ? "group" : "private";
@@ -92,10 +109,7 @@ export default async function handler(sock, from, body, m) {
 
             if (memory._status !== false && memory[type][text]) {
                 let answers = memory[type][text];
-                if (!Array.isArray(answers)) {
-                    answers = [{ text: answers, score: 1 }];
-                    memory[type][text] = answers;
-                }
+                if (!Array.isArray(answers)) answers = [{ text: answers, score: 1 }];
                 answers.sort((a, b) => b.score - a.score);
                 let answer = answers[0];
                 answer.score++;
@@ -103,66 +117,10 @@ export default async function handler(sock, from, body, m) {
                 await sock.sendMessage(from, { text: answer.text }, { quoted: m });
                 return;
             }
-
-            if (memory._status !== false && canLearn(body)) {
-                const old = lastMessages.get(from);
-                if (old && old !== text) {
-                    if (!memory[type][old]) {
-                        memory[type][old] = [{ text: body, score: 1 }];
-                    } else {
-                        let exists = memory[type][old].find(x => x.text === body);
-                        if (!exists) memory[type][old].push({ text: body, score: 1 });
-                    }
-                    saveShowder(memory);
-                }
-                lastMessages.set(from, text);
-            }
-
             try { await smart(sock, from, body, m); } catch (e) {}
             return;
         }
 
-        let commandText = body.trim();
-        if (/^!play/i.test(commandText)) {
-            const query = commandText.slice(5).trim();
-            commandText = query ? `!play ${query}` : "!play";
-        }
-
-        const match = commandText.match(/^!(\S+)(?:\s+(.*))?$/s);
-        if (!match) return;
-
-        const command = match[1].toLowerCase();
-        const args = match[2] ? match[2].trim().split(/\s+/) : [];
-        const cmd = commands.get(command);
-
-        if (cmd) {
-            try { await cmd(sock, from, commandText, m, args); } catch (e) { console.log(e); }
-            return;
-        }
-
-        switch (command) {
-            case "pgr": {
-                const subCmd = args[0];
-                if (subCmd === "crash") await crashCmd(sock, from, body, m, args);
-                else if (subCmd === "stop") await stopCrash(sock, from, body, m, args);
-                else await sock.sendMessage(from, { text: "دستور نامعتبر." }, { quoted: m });
-                break;
-            }
-            case "ping": await sock.sendMessage(from, { text: "pong 🏓" }); break;
-            case "owner": await sock.sendMessage(from, { text: "👑 OWNER: SULTAN SHIRZAI" }); break;
-            case "afk": {
-                const sender = m.key.participant || m.key.remoteJid;
-                const reason = args.join(' ') || 'بدون دلیل';
-                if (global.afkUsers.has(sender)) {
-                    global.afkUsers.delete(sender);
-                    await sock.sendMessage(from, { text: "👋 وضعیت AFK شما حذف شد." }, { quoted: m });
-                } else {
-                    global.afkUsers.set(sender, reason);
-                    await sock.sendMessage(from, { text: `💤 *وضعیت AFK ثبت شد.*\n📝 دلیل: ${reason}` }, { quoted: m });
-                }
-                break;
-            }
-        }
     } catch (e) {
         console.log("HANDLER ERROR:", e);
     }
