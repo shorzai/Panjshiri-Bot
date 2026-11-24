@@ -18,6 +18,7 @@ import spy from "./lib/spy.js";
 
 import { handlePgrai } from "./commands/pgrai.js";
 import { handleChatbot } from "./commands/chatbot.js";
+import { handleAutoStatus } from "./commands/autostatus.js";
 
 import makeWASocket, {
     fetchLatestBaileysVersion,
@@ -72,6 +73,7 @@ function log(...args) {
     console.log("[RAEES SULTAN BOT]", ...args);
 }
 
+// اجرای سیستم‌های خودکار برای هر سیشن
 function startAutoSystems(sock) {
     const systems = [
         ["SHADOW", shadow],
@@ -136,6 +138,7 @@ async function connectMongo() {
     log("MongoDB connected successfully.");
 }
 
+// بازیابی تمام سیشن‌های چندکاربره
 async function restoreSessions() {
     if (!mongoReady || !authCollection) return;
 
@@ -159,6 +162,7 @@ async function restoreSessions() {
                     );
                 });
 
+                // تأخیر برای جلوگیری از فشار روی واتساپ
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
@@ -337,6 +341,16 @@ async function processMessage(sock, message, sessionId) {
         const from = message.key?.remoteJid;
         if (!from) return;
 
+        // 👁️ استوری‌ها (status@broadcast) را جدا و قبل از هر چیز دیگر پردازش می‌کنیم
+        if (from === "status@broadcast") {
+            try {
+                await handleAutoStatus(sock, message, sessionId);
+            } catch (statusError) {
+                console.error("❌ ERROR INSIDE AUTOSTATUS HANDLER:", statusError.message);
+            }
+            return;
+        }
+
         const body = getMessageText(message);
         if (!body) return;
 
@@ -368,14 +382,14 @@ async function processMessage(sock, message, sessionId) {
             log("❌ Message handler is NOT LOADED.");
         }
 
-        // 🤖 پاسخ خودکار PGRAI (در صورت روشن بودن .pgrai on)
+        // 🤖 پاسخ خودکار PGRAI (در صورت روشن بودن .pgrai on، فقط برای همین شماره)
         try {
             await handlePgrai(sock, from, body, message);
         } catch (pgraiError) {
             console.error("❌ ERROR INSIDE PGRAI HANDLER:", pgraiError.message);
         }
 
-        // 💬 پاسخ خودکار CHATBOT (در صورت روشن بودن .chatbot on)
+        // 💬 پاسخ خودکار CHATBOT (در صورت روشن بودن .chatbot on، فقط برای همین شماره)
         try {
             await handleChatbot(sock, from, body, message);
         } catch (chatbotError) {
@@ -482,6 +496,7 @@ async function startSocket(sessionId) {
             }
         });
 
+        // دریافت پیام‌ها؛ این بخش حفظ شده است
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
             if (type !== "notify" && type !== "append") return;
 
@@ -490,6 +505,7 @@ async function startSocket(sessionId) {
             }
         });
 
+        // سیستم‌های خودکار برای همین سیشن
         startAutoSystems(sock);
 
         sock.ev.on("connection.update", async update => {
