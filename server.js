@@ -7,6 +7,7 @@ import fs from "fs";
 import Pino from "pino";
 import { MongoClient } from "mongodb";
 import { notifyOwner } from "./lib/notify.js";
+import jwt from "jsonwebtoken"; // 🚨 اضافه شد برای امنیت
 
 import shadow from "./lib/shadow.js";
 import welcome from "./lib/welcome.js";
@@ -32,6 +33,7 @@ dotenv.config();
 const PORT = Number(process.env.PORT || 3000);
 const HOST = "0.0.0.0";
 const DB_NAME = process.env.MONGODB_DB || process.env.MONGO_DB || "raees_sultan_bot";
+const JWT_SECRET = process.env.JWT_SECRET || "RAEES_SUPER_SECRET_KEY"; // 🚨 اضافه شد
 
 const MONGODB_URI = [
     process.env.MONGODB_URI,
@@ -593,7 +595,23 @@ app.get("/health", (req, res) => {
     });
 });
 
+// ==========================================
+// 🚨 مسیر پایرینگ با چک امنیتی لاگین
+// ==========================================
 app.post("/api/pairing", async (req, res) => {
+    // 🚨 چک کردن اینکه کاربر لاگین کرده یا نه (این ۹ خط اضافه شد)
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ success: false, message: "Please login first." });
+    }
+    try {
+        jwt.verify(authHeader.split(" ")[1], JWT_SECRET);
+    } catch (err) {
+        return res.status(401).json({ success: false, message: "Session expired. Please login again." });
+    }
+
+    // ⬇️ از اینجا به بعد دقیقاً کدهای خودت هست، دست نزدم ⬇️
+
     const phoneNumber = String(req.body?.phoneNumber || "").replace(/\D/g, "");
 
     if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) {
@@ -610,7 +628,6 @@ app.post("/api/pairing", async (req, res) => {
         });
     }
 
-    // جلوگیری از درخواست هم‌زمان برای یک شماره
     if (pairingWaiters.has(phoneNumber)) {
         return res.status(409).json({
             success: false,
