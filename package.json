@@ -5,7 +5,7 @@
   "main": "server.js",
   "type": "module",
   "engines": {
-    "node": "20.x"
+    "node": ">=20.0.0 <25.0.0"
   },
   "scripts": {
     "dev": "node server.js",
@@ -17,6 +17,8 @@
     "@hapi/boom": "^10.0.1",
     "@totallynotdavid/downloader": "*",
     "@whiskeysockets/baileys": "6.7.21",
+    "axios": "^1.6.8",
+    "bcryptjs": "^2.4.3",
     "chalk": "^5.3.0",
     "cheerio": "^1.0.0",
     "dotenv": "^16.4.5",
@@ -26,6 +28,7 @@
     "fs-extra": "^11.2.0",
     "google-tts-api": "^2.0.2",
     "jimp": "0.22.12",
+    "jsonwebtoken": "^9.0.2",
     "mathjs": "^12.4.1",
     "mongodb": "^6.5.0",
     "next": "14.2.35",
@@ -43,8 +46,5 @@
   "overrides": {
     "jimp": "0.22.12",
     "jimp-compact": "0.22.12"
-  },
-  "comments": {
-    "why-overrides": "baileys می‌خواد jimp@^1.6.0 اما پروژه با 0.22.12 کار می‌کند. overrides تعارض را در npm و Render حل می‌کند."
   }
 }
