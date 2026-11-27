@@ -1,42 +1,20 @@
 import fs from "fs";
+import sharp from "sharp";
 
-// 🔤 تبدیل متن عادی به حروف بولد-سریف یونیکد (مثل تصویر نمونه)
-function toBoldSerif(str) {
-    const map = {};
-    const upperStart = 0x1D400; // 𝐀
-    const lowerStart = 0x1D41A; // 𝐚
-    const digitStart = 0x1D7CE; // 𝟎
-    for (let i = 0; i < 26; i++) {
-        map[String.fromCharCode(65 + i)] = String.fromCodePoint(upperStart + i); // A-Z
-        map[String.fromCharCode(97 + i)] = String.fromCodePoint(lowerStart + i); // a-z
-    }
-    for (let i = 0; i < 10; i++) {
-        map[String(i)] = String.fromCodePoint(digitStart + i); // 0-9
-    }
-    return str.split("").map(ch => map[ch] || ch).join("");
+function escapeXML(value) {
+    return String(value).replace(/[&<>"']/g, ch => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&apos;"
+    }[ch]));
 }
 
 export default async function allmenu(sock, from, body, m, args) {
     try {
-        const pushname = m.pushName || "کاربر";
-        let commandsCount = 0;
-        try {
-            commandsCount = fs.readdirSync("./commands").filter(f => f.endsWith(".js")).length;
-        } catch {}
+        const pushname = m?.pushName || "کاربر";
 
-        const imagePath = "./sultan/menu.jpg";
-        if (fs.existsSync(imagePath)) {
-            try {
-                await sock.sendMessage(from, {
-                    image: fs.readFileSync(imagePath),
-                    caption: `👑 *RAEES SULTAN BOT*\n\n👤 کاربر: ${pushname}\n📦 دستورات: ${commandsCount}\n\n📚 لیست دستورات به صورت صفحات شناور برای شما ارسال می‌شود...`
-                }, { quoted: m });
-            } catch (imageError) {
-                console.log("❌ MENU IMAGE ERROR:", imageError.message);
-            }
-        }
-
-        // هر بخش را در یک پیام جداگانه ارسال میکنیم تا شناور به نظر برسند
         const sections = [
             {
                 title: "AI COMMAND LIST",
@@ -95,40 +73,156 @@ export default async function allmenu(sock, from, body, m, args) {
             }
         ];
 
-        // 🎨 ساخت باکس به سبک تصویر نمونه (◆ گوشه‌ها + ⬡ بولت‌ها + حروف بولد-سریف)
-        function buildBox(section) {
-            const boldTitle = toBoldSerif(section.title);
-            const boldTotalLabel = toBoldSerif("TOTAL COMMANDS LIST");
-            const topLine = `┌─────── ◆ ${boldTitle} ◆ ───────`;
-            const bottomLine = "────────────────────────── L";
+        const width = 1400;
+        const cardWidth = 650;
+        const gap = 30;
+        const leftX = 35;
+        const rightX = leftX + cardWidth + gap;
 
-            let text = `${topLine}\n│\n`;
-            for (const cmd of section.commands) {
-                text += `│  ⬡  ${cmd}\n`;
+        const cardHeight = section =>
+            125 + section.commands.length * 43;
+
+        const columns = [
+            sections.filter((_, i) => i % 2 === 0),
+            sections.filter((_, i) => i % 2 === 1)
+        ];
+
+        const heights = columns.map(col =>
+            col.reduce((sum, section) => sum + cardHeight(section) + 28, 0)
+        );
+
+        const height = Math.max(...heights) + 310;
+
+        let svg = `
+        <svg xmlns="http://www.w3.org/2000/svg"
+             width="${width}" height="${height}"
+             viewBox="0 0 ${width} ${height}">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#071b2e"/>
+            <stop offset="100%" stop-color="#10102b"/>
+          </linearGradient>
+          <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#142e42"/>
+            <stop offset="100%" stop-color="#18203a"/>
+          </linearGradient>
+          <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#00e5c0"/>
+            <stop offset="100%" stop-color="#b4ff45"/>
+          </linearGradient>
+        </defs>
+
+        <rect width="100%" height="100%" fill="url(#bg)"/>
+
+        <text x="700" y="85" text-anchor="middle"
+          font-family="Arial" font-size="52" font-weight="bold"
+          fill="url(#gold)">RAEES SULTAN BOT</text>
+
+        <text x="700" y="135" text-anchor="middle"
+          font-family="Arial" font-size="25" fill="#d7e8f0">
+          COMPLETE COMMAND MENU
+        </text>
+
+        <line x1="80" y1="165" x2="1320" y2="165"
+          stroke="#00e5c0" stroke-width="3"/>
+        `;
+
+        function makeColumn(items, x) {
+            let y = 195;
+
+            for (const section of items) {
+                const h = cardHeight(section);
+
+                svg += `
+                <rect x="${x}" y="${y}" width="${cardWidth}" height="${h}"
+                  rx="25" fill="url(#card)"
+                  stroke="#00cbb0" stroke-width="3"/>
+
+                <rect x="${x + 4}" y="${y + 4}"
+                  width="${cardWidth - 8}" height="76"
+                  rx="20" fill="#0b4550"/>
+
+                <text x="${x + cardWidth / 2}" y="${y + 49}"
+                  text-anchor="middle" font-family="Arial"
+                  font-size="27" font-weight="bold"
+                  fill="#b8ff58">${escapeXML(section.title)}</text>
+                `;
+
+                let commandY = y + 119;
+
+                for (const cmd of section.commands) {
+                    svg += `
+                    <text x="${x + 35}" y="${commandY}"
+                      font-family="Arial" font-size="27"
+                      fill="#ffffff">⬡ ${escapeXML(cmd)}</text>
+                    `;
+                    commandY += 43;
+                }
+
+                svg += `
+                <line x1="${x + 30}" y1="${y + h - 65}"
+                  x2="${x + cardWidth - 30}" y2="${y + h - 65}"
+                  stroke="#00cbb0" stroke-width="2"/>
+
+                <text x="${x + cardWidth / 2}" y="${y + h - 25}"
+                  text-anchor="middle" font-family="Arial"
+                  font-size="23" font-weight="bold"
+                  fill="#b8ff58">
+                  TOTAL COMMANDS: ${section.total}
+                </text>
+                `;
+
+                y += h + 28;
             }
-            text += `│\n`;
-            text += `│  ${boldTotalLabel} : ${section.total}\n`;
-            text += `${bottomLine}`;
-            return text;
         }
 
-        // 🚀 ارسال هر بخش در یک پیام جداگانه (شبیه به کارت شناور)
-        for (const section of sections) {
-            const text = buildBox(section);
-            await sock.sendMessage(from, { text });
-            // یک مکث کوتاه بین پیام‌ها تا اسپم نشود و کاربر بتواند بخواند
-            await new Promise(r => setTimeout(r, 800));
+        makeColumn(columns[0], leftX);
+        makeColumn(columns[1], rightX);
+
+        svg += `
+        <line x1="80" y1="${height - 85}" x2="1320" y2="${height - 85}"
+          stroke="#00e5c0" stroke-width="3"/>
+
+        <text x="700" y="${height - 40}" text-anchor="middle"
+          font-family="Arial" font-size="25" font-weight="bold"
+          fill="#ffffff">POWERED BY RAEES SULTAN BOT</text>
+        </svg>
+        `;
+
+        const menuBuffer = await sharp(Buffer.from(svg))
+            .png()
+            .toBuffer();
+
+        const imagePath = "./sultan/menu.jpg";
+
+        if (fs.existsSync(imagePath)) {
+            try {
+                await sock.sendMessage(from, {
+                    image: fs.readFileSync(imagePath),
+                    caption:
+                        `👑 *RAEES SULTAN BOT*\n\n` +
+                        `👤 کاربر: ${pushname}\n` +
+                        `📦 تعداد بخش‌ها: ${sections.length}\n` +
+                        `📚 تمام دستورات در تصویر منو`
+                }, { quoted: m });
+            } catch (err) {
+                console.log("MENU INTRO ERROR:", err.message);
+            }
         }
 
-        // 🚀 ارسال پیام آخر با دکمه لینک کانال
+        await sock.sendMessage(from, {
+            image: menuBuffer,
+            caption: "👑 RAEES SULTAN BOT\n📚 COMPLETE COMMAND LIST"
+        }, { quoted: m });
+
         await sock.sendMessage(from, {
             text: `📞 *پشتیبانی:* wa.me/93794384087\n\n🔥 *POWERED BY 👑 RAEES SULTAN BOT*`,
             footer: "👑 RAEES SULTAN BOT",
             templateButtons: [
                 {
                     urlButton: {
-                        displayText: '📢 JOIN OFFICIAL CHANNEL',
-                        url: 'https://whatsapp.com/channel/0029VbDOqY8DOQIcTC1Epm2H'
+                        displayText: "📢 JOIN OFFICIAL CHANNEL",
+                        url: "https://whatsapp.com/channel/0029VbDOqY8DOQIcTC1Epm2H"
                     }
                 }
             ]
@@ -136,5 +230,11 @@ export default async function allmenu(sock, from, body, m, args) {
 
     } catch (e) {
         console.log("ALLMENU ERROR:", e.message);
+
+        try {
+            await sock.sendMessage(from, {
+                text: "❌ منو ساخته نشد. لطفاً بعداً دوباره تلاش کنید."
+            }, { quoted: m });
+        } catch {}
     }
 }
