@@ -8,21 +8,52 @@ const SEARCH_API = "https://pro-apis.zone.id/api/search/yts";
 const MAX_SIZE = 25 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT = 180000;
 
-// یک نمونه برای استفاده مجدد در تمام درخواست‌ها
 const yt = new Ytdl({
     lang: "en",
     timeoutMs: 30000
 });
 
+// استخراج جزئیات خطا برای لاگ Render
+function getErrorDetails(error) {
+    const cause = error?.cause;
+
+    return {
+        name: error?.name,
+        message: error?.message,
+        code: error?.code,
+        step: error?.step,
+        cause: cause
+            ? {
+                name: cause.name,
+                message: cause.message,
+                code: cause.code
+            }
+            : null,
+        attempts: Array.isArray(error?.attempts)
+            ? error.attempts.map(item => ({
+                client: item.client,
+                code: item.code,
+                step: item.step,
+                message: item.message,
+                cause: item.cause?.message || item.cause
+            }))
+            : undefined,
+        stack: error?.stack
+    };
+}
+
 async function fetchJSON(url, timeout = 60000) {
     const response = await fetch(url, {
-        headers: { "x-api-key": API_KEY },
+        headers: {
+            "x-api-key": API_KEY
+        },
         signal: AbortSignal.timeout(timeout)
     });
 
     const text = await response.text();
 
     let data;
+
     try {
         data = JSON.parse(text);
     } catch {
@@ -82,16 +113,27 @@ async function downloadMP3(videoUrl) {
         throw new Error("FFmpeg در سیستم پیدا نشد.");
     }
 
+    console.log("PLAY: Getting YouTube video information");
+
     const info = await yt.getInfo(videoUrl);
 
     const title =
-        info.videoDetails?.title || "RAEES SULTAN MUSIC";
+        info.videoDetails?.title ||
+        "RAEES SULTAN MUSIC";
+
+    console.log("PLAY: Video information received:", title);
 
     const audioStream = yt.download(info, {
         quality: Quality.HighestAudio,
         filter: {
             hasAudio: true,
             hasVideo: false
+        },
+        onRetry: ({ attempt, client, reason }) => {
+            console.warn(
+                "PLAY DOWNLOAD RETRY:",
+                { attempt, client, reason }
+            );
         }
     });
 
@@ -115,13 +157,13 @@ async function downloadMP3(videoUrl) {
         let settled = false;
 
         const timer = setTimeout(() => {
-            ffmpeg.kill("SIGKILL");
             finish(new Error("زمان دانلود تمام شد."));
         }, DOWNLOAD_TIMEOUT);
 
         function finish(error, buffer) {
             if (settled) return;
             settled = true;
+
             clearTimeout(timer);
 
             if (error) {
@@ -138,7 +180,9 @@ async function downloadMP3(videoUrl) {
 
             if (totalSize > MAX_SIZE) {
                 finish(
-                    new Error("حجم آهنگ بیشتر از ۲۵ مگابایت است.")
+                    new Error(
+                        "حجم آهنگ بیشتر از ۲۵ مگابایت است."
+                    )
                 );
                 return;
             }
@@ -148,22 +192,28 @@ async function downloadMP3(videoUrl) {
 
         ffmpeg.stderr.on("data", chunk => {
             stderr += chunk.toString();
+
             if (stderr.length > 4000) {
                 stderr = stderr.slice(-4000);
             }
         });
 
         ffmpeg.on("error", error => {
-            finish(new Error("اجرای FFmpeg ناموفق بود: " + error.message));
+            finish(
+                new Error(
+                    "اجرای FFmpeg ناموفق بود: " +
+                    error.message
+                )
+            );
         });
 
         audioStream.on("error", error => {
-            finish(new Error("دانلود از یوتیوب ناموفق بود: " + error.message));
+            finish(error);
         });
 
         ffmpeg.stdin.on("error", error => {
-            if (!settled) {
-                finish(new Error("خطا در انتقال صدای یوتیوب: " + error.message));
+            if (!settled && error.code !== "EPIPE") {
+                finish(error);
             }
         });
 
@@ -228,7 +278,7 @@ export default async function play(
         let videoUrl = query;
         let song = {};
 
-        // جست‌وجوی قبلی حفظ شده است
+        // جست‌وجوی فعلی حفظ شده است
         if (!isYouTubeLink(query)) {
             const searchURL = new URL(SEARCH_API);
 
@@ -282,7 +332,8 @@ export default async function play(
                 "در حال دانلود از یوتیوب، لطفاً منتظر بمانید..."
         }, { quoted: m });
 
-        // دانلود مستقیم از یوتیوب و تبدیل به MP3
+        console.log("PLAY: Starting download:", videoUrl);
+
         const result = await downloadMP3(videoUrl);
 
         const safeName = result.title
@@ -303,7 +354,10 @@ export default async function play(
         );
 
     } catch (error) {
-        console.error("PLAY ERROR:", error);
+        console.error(
+            "PLAY ERROR DETAILS:",
+            JSON.stringify(getErrorDetails(error), null, 2)
+        );
 
         try {
             await sock.sendMessage(from, {
@@ -312,7 +366,10 @@ export default async function play(
                     `📌 دلیل: ${error.message}`
             }, { quoted: m });
         } catch (sendError) {
-            console.error("PLAY ERROR MESSAGE:", sendError);
+            console.error(
+                "PLAY ERROR MESSAGE:",
+                sendError?.message
+            );
         }
     }
 }
