@@ -5,16 +5,16 @@
   "main": "server.js",
   "type": "module",
   "engines": {
-    "node": ">=20.0.0 <25.0.0"
+    "node": ">=24.15.0 <25.0.0"
   },
   "scripts": {
     "dev": "node server.js",
     "build": "next build",
     "start": "NODE_ENV=production node server.js",
-    "termux": "node index.js",
-    "postinstall": "node -e \"require('youtube-dl-exec').updateYtdlp()\" || exit 0"
+    "termux": "node index.js"
   },
   "dependencies": {
+    "@distube/ytdl-core": "5.2.1",
     "@hapi/boom": "^10.0.1",
     "@totallynotdavid/downloader": "*",
     "@whiskeysockets/baileys": "6.7.21",
@@ -44,8 +44,7 @@
     "rss-parser": "^3.13.0",
     "sharp": "^0.32.6",
     "spottydl": "^0.2.7",
-    "tsun-dls": "*",
-    "youtube-dl-exec": "^3.0.2"
+    "tsun-dls": "*"
   },
   "overrides": {
     "jimp": "0.22.12",

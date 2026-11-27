@@ -1,16 +1,18 @@
-import ytdlp from "youtube-dl-exec";
+import { Ytdl, Quality } from "@distube/ytdl-core";
 import ffmpegPath from "ffmpeg-static";
-import fs from "fs";
-import path from "path";
-import os from "os";
+import { spawn } from "node:child_process";
 
 const API_KEY = "freekey";
 const SEARCH_API = "https://pro-apis.zone.id/api/search/yts";
 
-const USE_COOKIES = false;
-const COOKIES_FILE = path.join(process.cwd(), "cookies.txt");
-
 const MAX_SIZE = 25 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT = 180000;
+
+// یک نمونه برای استفاده مجدد در تمام درخواست‌ها
+const yt = new Ytdl({
+    lang: "en",
+    timeoutMs: 30000
+});
 
 async function fetchJSON(url, timeout = 60000) {
     const response = await fetch(url, {
@@ -66,72 +68,130 @@ function getResults(data) {
 
 function getVideoUrl(song) {
     return (
-        song.url ||
-        song.videoUrl ||
-        song.video_url ||
-        song.link ||
-        song.video ||
+        song?.url ||
+        song?.videoUrl ||
+        song?.video_url ||
+        song?.link ||
+        song?.video ||
         ""
     );
 }
 
-async function downloadMP3(videoUrl, timeout = 120000) {
-    const tmpDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ytdlp-")
-    );
-
-    const options = {
-        extractAudio: true,
-        audioFormat: "mp3",
-        audioQuality: "128K",
-        noPlaylist: true,
-        forceIpv4: true,
-        socketTimeout: 30,
-        retries: 3,
-        noProgress: true,
-        output: path.join(tmpDir, "audio.%(ext)s"),
-        ffmpegLocation: ffmpegPath,
-        dumpSingleJson: false,
-        printJson: false
-    };
-
-    if (USE_COOKIES && fs.existsSync(COOKIES_FILE)) {
-        options.cookies = COOKIES_FILE;
+async function downloadMP3(videoUrl) {
+    if (!ffmpegPath) {
+        throw new Error("FFmpeg در سیستم پیدا نشد.");
     }
 
-    try {
-        await ytdlp.exec(videoUrl, options);
+    const info = await yt.getInfo(videoUrl);
 
-        const file = fs.readdirSync(tmpDir)
-            .find(f => f.startsWith("audio."));
+    const title =
+        info.videoDetails?.title || "RAEES SULTAN MUSIC";
 
-        if (!file) {
-            throw new Error("yt-dlp فایل خروجی تولید نکرد.");
+    const audioStream = yt.download(info, {
+        quality: Quality.HighestAudio,
+        filter: {
+            hasAudio: true,
+            hasVideo: false
+        }
+    });
+
+    const ffmpeg = spawn(ffmpegPath, [
+        "-hide_banner",
+        "-loglevel", "error",
+        "-i", "pipe:0",
+        "-vn",
+        "-codec:a", "libmp3lame",
+        "-b:a", "128k",
+        "-f", "mp3",
+        "pipe:1"
+    ], {
+        stdio: ["pipe", "pipe", "pipe"]
+    });
+
+    return await new Promise((resolve, reject) => {
+        const chunks = [];
+        let totalSize = 0;
+        let stderr = "";
+        let settled = false;
+
+        const timer = setTimeout(() => {
+            ffmpeg.kill("SIGKILL");
+            finish(new Error("زمان دانلود تمام شد."));
+        }, DOWNLOAD_TIMEOUT);
+
+        function finish(error, buffer) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+
+            if (error) {
+                audioStream.destroy();
+                ffmpeg.kill("SIGKILL");
+                reject(error);
+            } else {
+                resolve({ buffer, title });
+            }
         }
 
-        const buffer = fs.readFileSync(
-            path.join(tmpDir, file)
-        );
+        ffmpeg.stdout.on("data", chunk => {
+            totalSize += chunk.length;
 
-        return { buffer, tmpDir };
-    } catch (err) {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-        throw err;
-    }
-}
+            if (totalSize > MAX_SIZE) {
+                finish(
+                    new Error("حجم آهنگ بیشتر از ۲۵ مگابایت است.")
+                );
+                return;
+            }
 
-async function getVideoTitle(videoUrl) {
-    try {
-        const info = await ytdlp.exec(videoUrl, {
-            dumpSingleJson: true,
-            noPlaylist: true,
-            skipDownload: true
+            chunks.push(chunk);
         });
 
-        return info?.title || "";
-    } catch {
-        return "";
-    }
+        ffmpeg.stderr.on("data", chunk => {
+            stderr += chunk.toString();
+            if (stderr.length > 4000) {
+                stderr = stderr.slice(-4000);
+            }
+        });
+
+        ffmpeg.on("error", error => {
+            finish(new Error("اجرای FFmpeg ناموفق بود: " + error.message));
+        });
+
+        audioStream.on("error", error => {
+            finish(new Error("دانلود از یوتیوب ناموفق بود: " + error.message));
+        });
+
+        ffmpeg.stdin.on("error", error => {
+            if (!settled) {
+                finish(new Error("خطا در انتقال صدای یوتیوب: " + error.message));
+            }
+        });
+
+        ffmpeg.on("close", code => {
+            if (settled) return;
+
+            if (code !== 0) {
+                finish(
+                    new Error(
+                        "تبدیل MP3 ناموفق بود: " +
+                        (stderr || `FFmpeg exit code ${code}`)
+                    )
+                );
+                return;
+            }
+
+            const buffer = Buffer.concat(chunks);
+
+            if (!buffer.length) {
+                finish(new Error("فایل MP3 خالی است."));
+                return;
+            }
+
+            finish(null, buffer);
+        });
+
+        audioStream.pipe(ffmpeg.stdin);
+    });
 }
 
 export default async function play(
@@ -153,21 +213,22 @@ export default async function play(
                     "روش استفاده:\n\n" +
                     "1️⃣ !play نام آهنگ\n" +
                     "2️⃣ !play نام خواننده\n" +
-                    "3️⃣ !play بخشی از متن آهنگ\n" +
-                    "4️⃣ !play لینک یوتیوب\n\n" +
+                    "3️⃣ !play لینک یوتیوب\n\n" +
                     "مثال:\n" +
-                    "!play آهنگ ایرانی تو که از اولشم یکی دیگه توی قلبت بود"
+                    "!play آهنگ ایرانی"
             }, { quoted: m });
         }
 
         await sock.sendMessage(from, {
-            text: "🔎 *در حال جست‌وجوی آهنگ...*\n\n" +
-                  `🎵 عبارت: ${query}`
+            text:
+                "🔎 *در حال جست‌وجوی آهنگ...*\n\n" +
+                `🎵 عبارت: ${query}`
         }, { quoted: m });
 
         let videoUrl = query;
         let song = {};
 
+        // جست‌وجوی قبلی حفظ شده است
         if (!isYouTubeLink(query)) {
             const searchURL = new URL(SEARCH_API);
 
@@ -202,7 +263,7 @@ export default async function play(
 
             if (!videoUrl) {
                 throw new Error(
-                    "لینک یوتیوب در نتایج سرچ پیدا نشد."
+                    "لینک یوتیوب در نتایج پیدا نشد."
                 );
             }
         }
@@ -210,7 +271,6 @@ export default async function play(
         const songTitle =
             song.title ||
             song.name ||
-            await getVideoTitle(videoUrl) ||
             "آهنگ درخواستی";
 
         await sock.sendMessage(from, {
@@ -219,53 +279,40 @@ export default async function play(
                 `🎵 ${songTitle}\n\n` +
                 "🎧 فرمت: MP3\n" +
                 "🎚 کیفیت: 128kbps\n\n" +
-                "در حال دانلود، لطفاً منتظر بمانید..."
+                "در حال دانلود از یوتیوب، لطفاً منتظر بمانید..."
         }, { quoted: m });
 
-        const { buffer: audioBuffer, tmpDir } =
-            await downloadMP3(videoUrl);
+        // دانلود مستقیم از یوتیوب و تبدیل به MP3
+        const result = await downloadMP3(videoUrl);
 
-        try {
-            if (!audioBuffer.length) {
-                throw new Error("فایل صوتی خالی است.");
-            }
-
-            if (audioBuffer.length > MAX_SIZE) {
-                throw new Error(
-                    "حجم آهنگ بیشتر از 25 مگابایت است."
-                );
-            }
-
-            const safeName = songTitle
-                .replace(/[\\/:*?"<>|]/g, "")
-                .slice(0, 100) || "Music";
-
-            await sock.sendMessage(from, {
-                audio: audioBuffer,
-                mimetype: "audio/mpeg",
-                fileName: `${safeName}.mp3`,
-                ptt: false
-            }, { quoted: m });
-
-            console.log(
-                "PLAY SUCCESS:",
-                songTitle,
-                audioBuffer.length
-            );
-        } finally {
-            fs.rmSync(tmpDir, {
-                recursive: true,
-                force: true
-            });
-        }
-
-    } catch (error) {
-        console.log("PLAY ERROR:", error);
+        const safeName = result.title
+            .replace(/[\\/:*?"<>|]/g, "")
+            .slice(0, 100) || "Music";
 
         await sock.sendMessage(from, {
-            text:
-                "❌ *دانلود آهنگ ناموفق بود.*\n\n" +
-                `📌 دلیل: ${error.message}`
+            audio: result.buffer,
+            mimetype: "audio/mpeg",
+            fileName: `${safeName}.mp3`,
+            ptt: false
         }, { quoted: m });
+
+        console.log(
+            "PLAY SUCCESS:",
+            result.title,
+            result.buffer.length
+        );
+
+    } catch (error) {
+        console.error("PLAY ERROR:", error);
+
+        try {
+            await sock.sendMessage(from, {
+                text:
+                    "❌ *دانلود آهنگ ناموفق بود.*\n\n" +
+                    `📌 دلیل: ${error.message}`
+            }, { quoted: m });
+        } catch (sendError) {
+            console.error("PLAY ERROR MESSAGE:", sendError);
+        }
     }
 }
