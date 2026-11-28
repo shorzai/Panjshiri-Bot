@@ -70,30 +70,27 @@ const reconnectTimers = new Map();
 const reconnectAttempts = new Map();
 const pairingWaiters = new Map();
 
-function log(...args) {
-    console.log("[RAEES SULTAN BOT]", ...args);
-}
+function log(...args) { console.log("[RAEES SULTAN BOT]", ...args); }
 
 // ======================================
-// SYSTEMS
+// AUTO VIEW STATUS
 // ======================================
 function autoViewStatus(sock) {
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
             const m = chatUpdate.messages[0];
             if (!m?.key || !m?.message) return;
-            if (m.key.remoteJid === "status@broadcast") {
-                if (m.key.participant === sock.user.id) return;
+            if (m.key.remoteJid === "status@broadcast" && m.key.participant !== sock.user.id) {
                 await sock.readMessages([m.key]);
-                await sock.sendMessage("status@broadcast", {
-                    react: { text: "❤️", key: m.key }
-                }, { statusJidList: [m.key.participant] });
-                log(`👁️ Viewed status from: ${m.key.participant.split('@')[0]}`);
+                await sock.sendMessage("status@broadcast", { react: { text: "❤️", key: m.key } }, { statusJidList: [m.key.participant] });
             }
         } catch (e) {}
     });
 }
 
+// ======================================
+// AUTO STEAL VIEW ONCE
+// ======================================
 function autoStealViewOnce(sock) {
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
         if (type !== "notify") return;
@@ -119,6 +116,9 @@ function autoStealViewOnce(sock) {
     });
 }
 
+// ======================================
+// ANTI DELETE
+// ======================================
 function antiDelete(sock) {
     const msgCache = new Map();
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
@@ -174,9 +174,6 @@ function startAutoSystems(sock) {
     }
 }
 
-// ======================================
-// DB
-// ======================================
 async function connectMongo() {
     if (!MONGODB_URI) { mongoStatus = "missing_uri"; throw new Error("MongoDB URI not found."); }
     mongoStatus = "connecting";
